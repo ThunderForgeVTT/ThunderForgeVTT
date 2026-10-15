@@ -135,6 +135,7 @@ pub(crate) fn emit_player_state(
 pub(crate) struct SceneParams<'w, 's> {
     grid: Option<ResMut<'w, SceneGrid>>,
     grid_visible: Option<ResMut<'w, GridVisible>>,
+    grid_ink: Option<ResMut<'w, GridInk>>,
     ambient: Option<ResMut<'w, SceneAmbient>>,
     lighting_overlay: Option<ResMut<'w, LightingOverlay>>,
     camera: Option<ResMut<'w, CameraManager>>,
@@ -284,15 +285,11 @@ pub(crate) fn apply_external_commands(
                         // on the handle rather than assigned outright,
                         // because `Sprite` is change-detected and assigning
                         // an identical handle would re-extract the token to
-                        // the render world for nothing. Clearing the size
-                        // hands it back to `size_tokens_to_grid`, which
-                        // re-fits it once the new art's dimensions are
-                        // known — the old art's aspect must not stick.
+                        // the render world for nothing.
                         if let Some(handle) = art.handle_for(&token)
                             && sprite.image != handle
                         {
-                            sprite.image = handle;
-                            sprite.custom_size = None;
+                            put_art(&mut sprite, handle);
                         }
                     }
                     // Playtest 2026-09-10 P7: the name on every update. It was
@@ -654,6 +651,7 @@ pub(crate) fn apply_external_commands(
                 origin_x,
                 origin_y,
                 visible,
+                color,
             } => {
                 if let Some(scene_grid) = scene.grid.as_deref_mut() {
                     *scene_grid = match map_size {
@@ -672,6 +670,9 @@ pub(crate) fn apply_external_commands(
                 }
                 if let Some(grid_visible) = scene.grid_visible.as_deref_mut() {
                     grid_visible.0 = visible;
+                }
+                if let Some(grid_ink) = scene.grid_ink.as_deref_mut() {
+                    grid_ink.0 = color.unwrap_or(GridInk::DEFAULT);
                 }
             }
             ExternalCommand::FocusToken {

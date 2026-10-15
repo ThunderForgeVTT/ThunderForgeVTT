@@ -211,6 +211,11 @@ pub(crate) fn parse_command(input: &str) -> Option<ExternalCommand> {
                 .get("visible")
                 .and_then(Value::as_bool)
                 .unwrap_or(true),
+            color: value
+                .get("color")
+                .and_then(Value::as_str)
+                .and_then(|hex| Srgba::hex(hex).ok())
+                .map(Color::from),
         }),
         "set_token_grid" => Some(ExternalCommand::SetTokenGrid {
             token_id: value.get("tokenId")?.as_str()?.to_owned(),
@@ -639,6 +644,30 @@ mod selection_command_tests {
         ));
         assert!(parse_command(r#"{"type":"set_rendering"}"#).is_none());
         assert!(parse_command(r#"{"type":"set_rendering","on":"no"}"#).is_none());
+    }
+
+    /// A light table names its grid's ink; a scene that does not gets the
+    /// default back, and ink that is not a colour is ignored, not refused.
+    #[test]
+    fn a_grid_takes_its_ink_only_when_named() {
+        let ink = |input: &str| match parse_command(input) {
+            Some(ExternalCommand::SetSceneGrid { color, .. }) => color,
+            _ => panic!("not a grid: {input}"),
+        };
+        assert_eq!(
+            ink(r##"{"type":"set_scene_grid","size":48,"color":"#1f2a2e33"}"##),
+            Some(Color::from(Srgba::new(
+                0x1f as f32 / 255.0,
+                0x2a as f32 / 255.0,
+                0x2e as f32 / 255.0,
+                0x33 as f32 / 255.0
+            )))
+        );
+        assert_eq!(ink(r#"{"type":"set_scene_grid","size":48}"#), None);
+        assert_eq!(
+            ink(r#"{"type":"set_scene_grid","size":48,"color":"ink"}"#),
+            None
+        );
     }
 
     /// Spec 091: a reduced-motion fit lands at once; an old caller glides.

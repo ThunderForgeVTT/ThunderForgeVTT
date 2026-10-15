@@ -431,6 +431,8 @@ pub(crate) enum ExternalCommand {
         origin_x: f32,
         origin_y: f32,
         visible: bool,
+        /// The grid's ink; `None` is the default pale line.
+        color: Option<Color>,
     },
     /// Sets a token's grid behaviour: how many cells across it is, and whether
     /// it snaps. Tokens are one cell and snapping unless told otherwise.

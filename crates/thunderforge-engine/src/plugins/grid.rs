@@ -17,13 +17,8 @@
 
 use bevy::prelude::*;
 
-use crate::resources::{GridVisible, SceneGrid};
+use crate::resources::{GridInk, GridVisible, SceneGrid};
 use thunderforge_canvas_core::grid::{Cell, GridKind};
-
-/// Grid line colour. Deliberately low-contrast: the grid is a reference
-/// overlay on top of map art, not a feature of it. Owner, 2026-10-06, after
-/// sight (spec 076) darkened the board: fainter still, and dashed.
-const GRID_COLOR: Color = Color::srgba(0.85, 0.87, 0.92, 0.16);
 
 /// Dashes per cell edge. A dash is centred on every cell corner and on the
 /// points between, so the corners read first and the line between them is
@@ -58,6 +53,7 @@ impl Plugin for GridPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<SceneGrid>()
             .init_resource::<GridVisible>()
+            .init_resource::<GridInk>()
             .add_systems(Update, draw_grid);
     }
 }
@@ -77,6 +73,7 @@ fn visible_world_rect(camera: &Projection, transform: &GlobalTransform) -> Optio
 fn draw_grid(
     grid: Res<SceneGrid>,
     visible: Res<GridVisible>,
+    ink: Res<GridInk>,
     cameras: Query<(&Camera, &Projection, &GlobalTransform), With<Camera2d>>,
     mut gizmos: Gizmos,
 ) {
@@ -143,11 +140,11 @@ fn draw_grid(
 
             for q in q0..=(q1 + 1) {
                 let x = grid.origin.x + q as f32 * size;
-                grid_line(&mut gizmos, Vec2::new(x, y0), Vec2::new(x, y1), dash);
+                grid_line(&mut gizmos, ink.0, Vec2::new(x, y0), Vec2::new(x, y1), dash);
             }
             for r in r0..=(r1 + 1) {
                 let y = grid.origin.y + r as f32 * size;
-                grid_line(&mut gizmos, Vec2::new(x0, y), Vec2::new(x1, y), dash);
+                grid_line(&mut gizmos, ink.0, Vec2::new(x0, y), Vec2::new(x1, y), dash);
             }
         }
         GridKind::HexPointyTop | GridKind::HexFlatTop => {
@@ -171,7 +168,7 @@ fn draw_grid(
                         continue;
                     }
                     for pair in outline.windows(2) {
-                        grid_line(&mut gizmos, pair[0], pair[1], dash);
+                        grid_line(&mut gizmos, ink.0, pair[0], pair[1], dash);
                     }
                 }
             }
@@ -183,9 +180,9 @@ fn draw_grid(
 /// `a`, on `b` and on every `period` between. Grid lines start on a cell
 /// corner, so the corners of every cell are marked and the dashes of
 /// neighbouring lines meet.
-fn grid_line(gizmos: &mut Gizmos, a: Vec2, b: Vec2, period: Option<f32>) {
+fn grid_line(gizmos: &mut Gizmos, color: Color, a: Vec2, b: Vec2, period: Option<f32>) {
     let Some(period) = period.filter(|p| *p > f32::EPSILON) else {
-        gizmos.line_2d(a, b, GRID_COLOR);
+        gizmos.line_2d(a, b, color);
         return;
     };
     let length = a.distance(b);
@@ -200,7 +197,7 @@ fn grid_line(gizmos: &mut Gizmos, a: Vec2, b: Vec2, period: Option<f32>) {
         let from = (centre - half).max(0.0);
         let to = (centre + half).min(length);
         if to > from {
-            gizmos.line_2d(a + direction * from, a + direction * to, GRID_COLOR);
+            gizmos.line_2d(a + direction * from, a + direction * to, color);
         }
     }
 }

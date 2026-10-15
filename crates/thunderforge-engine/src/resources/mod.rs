@@ -16,7 +16,7 @@ pub use background::{PlacedCanvasImage, PlacedCanvasImages, SceneBackground};
 pub use background_cache::BackgroundTextureCache;
 pub use camera::CameraManager;
 pub use canvas_layer::{CanvasLayer, CanvasLayers};
-pub use grid::{GridVisible, SceneGrid};
+pub use grid::{GridInk, GridVisible, SceneGrid};
 pub use group_selection::{GroupKind, GroupSelection, Singles};
 pub use lighting::{LightEdit, LightSet, LightSource, SelectedLight};
 pub use scene_data::{GridType, SceneData};

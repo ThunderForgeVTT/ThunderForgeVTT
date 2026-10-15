@@ -32,6 +32,17 @@ impl TokenArt<'_> {
     }
 }
 
+/// Puts new art on a token's sprite. A token spawned without art is a square
+/// of its kind's colour (`Sprite::from_color`); that colour is the sprite's
+/// tint, so art arriving later must also clear it, or it is drawn as a flat
+/// square of the same colour. The size goes back to `size_tokens_to_grid`,
+/// which re-fits it once the new art's dimensions are known.
+pub(crate) fn put_art(sprite: &mut Sprite, image: Handle<Image>) {
+    sprite.image = image;
+    sprite.color = Color::WHITE;
+    sprite.custom_size = None;
+}
+
 /// Base64 (standard or URL alphabet, padding optional, a `data:` prefix
 /// tolerated) to a decoded image. The format is read from the bytes, so a
 /// WebP or a PNG both work; `is_srgb` because token art is colour, not data.
@@ -88,7 +99,16 @@ fn decode_base64(text: &str) -> Result<Vec<u8>, String> {
 
 #[cfg(test)]
 mod token_art_tests {
-    use super::decode_base64;
+    use super::{decode_base64, put_art};
+    use bevy::prelude::*;
+
+    #[test]
+    fn art_put_on_a_plain_token_is_not_tinted_its_kind_colour() {
+        let mut sprite = Sprite::from_color(Color::srgb(0.3, 0.5, 1.0), Vec2::splat(48.0));
+        put_art(&mut sprite, Handle::default());
+        assert_eq!(sprite.color, Color::WHITE);
+        assert_eq!(sprite.custom_size, None);
+    }
 
     #[test]
     fn decodes_standard_and_url_alphabets_with_or_without_padding() {
