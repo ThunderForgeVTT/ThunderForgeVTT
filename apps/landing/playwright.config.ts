@@ -20,6 +20,12 @@ export default defineConfig({
     actionTimeout: 15_000,
     screenshot: "only-on-failure",
     launchOptions: {
+      // The page runs the engine. Without a GPU Bevy falls back to
+      // SwiftShader at a few frames a second and every engine test times
+      // out. ANGLE over Vulkan is what works headless on Linux, as in
+      // `apps/web/playwright.config.ts`; the blocklist flag stops the
+      // others being accepted and then quietly ignored.
+      args: ["--enable-gpu", "--use-gl=angle", "--use-angle=vulkan", "--ignore-gpu-blocklist"],
       env: {
         ...(process.env as Record<string, string>),
         // See `scripts/e2e-parallel.mjs`: a headless browser has no business
