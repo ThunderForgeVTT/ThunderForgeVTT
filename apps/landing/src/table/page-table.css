@@ -321,8 +321,11 @@ body.in-engine .hero .token img {
 }
 :root.dusk {
   color-scheme: dark;
-  --mat: #1b2124;
-  --mat-deep: #151a1c;
+  /* The engine's night over the page (`NIGHT` in journey.ts), measured off
+     the screen: when a room takes the table the page behind it shows this,
+     and the night must not change colour as it does. */
+  --mat: #343a54;
+  --mat-deep: #2b3046;
   --paper: #222a2e;
   --ink-black: #e9e5da;
   --ink-blue: #7fa6f2;
