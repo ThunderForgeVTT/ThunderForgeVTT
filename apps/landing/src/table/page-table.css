@@ -138,3 +138,113 @@ body.in-engine .scroll-cue {
     transition: none;
   }
 }
+
+/* The hero builder, folded into the note: parts as selects, colours as
+   swatches, the token redrawn live. Native controls so it works by thumb. */
+.journey--build {
+  width: min(26rem, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+}
+.journey-tools {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+.journey-tools button,
+.builder-actions button {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.3rem 0.6rem;
+  border: 2px solid var(--ink-black);
+  border-radius: 8px 6px 9px 7px;
+  background: var(--paper);
+  color: var(--ink-black);
+  cursor: pointer;
+}
+.journey-tools button[aria-pressed="true"],
+.builder-apply {
+  background: var(--ink-blue);
+  border-color: var(--ink-blue);
+  color: #fff;
+}
+.builder-apply:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+.builder {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 0.6rem;
+}
+.builder-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.3rem 0.75rem;
+  align-items: center;
+}
+.builder-preview {
+  grid-row: 1 / 3;
+  width: 96px;
+  height: 96px;
+}
+.builder label {
+  display: grid;
+  gap: 0.15rem;
+  font-size: 0.75rem;
+  color: var(--text-soft);
+}
+.builder input[type="text"],
+.builder select {
+  font: inherit;
+  font-size: 0.9rem;
+  color: var(--ink-black);
+  padding: 0.3rem 0.4rem;
+  min-height: 2.2rem;
+  border: 2px solid var(--ink-black);
+  border-radius: 6px;
+  background: #fff;
+  width: 100%;
+}
+.builder-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+.builder-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
+  gap: 0.4rem 0.5rem;
+}
+.builder-flag {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  align-self: end;
+  min-height: 2.2rem;
+}
+.builder-flag input {
+  width: 1.3rem;
+  height: 1.3rem;
+  margin: 0;
+}
+.builder-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.builder-swatches label {
+  width: 2.6rem;
+  text-align: center;
+  font-size: 0.6rem;
+  line-height: 1.1;
+}
+.builder-swatches input {
+  width: 2.6rem;
+  height: 2.2rem;
+  padding: 0;
+  border: 2px solid var(--ink-black);
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+}

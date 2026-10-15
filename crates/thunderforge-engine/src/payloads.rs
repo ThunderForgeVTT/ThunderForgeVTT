@@ -105,6 +105,17 @@ pub(crate) struct WorldTokenPayload {
     /// almost no real token art is square.
     #[serde(default, rename = "photoUrl")]
     pub(crate) photo_url: Option<String>,
+    /// Token art as the image itself: a base64 PNG (or WebP) the host drew a
+    /// moment ago and never put at a URL — a hero built on the page, a
+    /// portrait painted in a canvas. `photoUrl` is for art that has an
+    /// address; this is for art that has none yet.
+    ///
+    /// Wins over `photoUrl` when both are sent. Decoded once, on the update
+    /// that carries it; a later positional update without it leaves the art
+    /// alone, like `photoUrl`. Bytes that do not decode keep the previous art
+    /// and log why.
+    #[serde(default, rename = "photoData")]
+    pub(crate) photo_data: Option<String>,
     /// What this token represents, deciding the colour it is drawn in when
     /// it has no art.
     ///

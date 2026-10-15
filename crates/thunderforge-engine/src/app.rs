@@ -216,10 +216,10 @@ pub(crate) fn apply_external_commands(
     // graceful-degradation rationale as `wall_set` above. One inbox for both
     // dice commands, so this system takes one parameter for them.
     dice_inbox: Option<ResMut<plugins::dice::DiceInbox>>,
-    // For token art (`upsert_token`'s optional `image`). Not `Option`: the
-    // asset server is part of `DefaultPlugins`, not a plugin this crate can
-    // choose to leave out.
-    asset_server: Res<AssetServer>,
+    // For token art (`upsert_token`'s `photoUrl` and `photoData`). Not
+    // `Option`: the asset server and the image store are part of
+    // `DefaultPlugins`, not a plugin this crate can choose to leave out.
+    mut art: TokenArt,
     // `Appearance` only exists once `StatusDisplayPlugin` is registered, same
     // graceful-degradation rationale as `wall_set` above. An appearance
     // command with no status plugin to apply it to is a no-op rather than a
@@ -288,12 +288,11 @@ pub(crate) fn apply_external_commands(
                         // hands it back to `size_tokens_to_grid`, which
                         // re-fits it once the new art's dimensions are
                         // known — the old art's aspect must not stick.
-                        if let Some(path) = token.photo_url.clone() {
-                            let handle = asset_server.load(path);
-                            if sprite.image != handle {
-                                sprite.image = handle;
-                                sprite.custom_size = None;
-                            }
+                        if let Some(handle) = art.handle_for(&token)
+                            && sprite.image != handle
+                        {
+                            sprite.image = handle;
+                            sprite.custom_size = None;
                         }
                     }
                     // Playtest 2026-09-10 P7: the name on every update. It was
@@ -332,11 +331,9 @@ pub(crate) fn apply_external_commands(
                     transform.rotation = Quat::from_rotation_z(rotation);
                 }
 
-                let sprite = match token.photo_url.clone() {
-                    Some(path) => Sprite {
-                        // Owned: `AssetServer::load` borrows for `'static`,
-                        // and `token` is dropped at the end of this arm.
-                        image: asset_server.load(path),
+                let sprite = match art.handle_for(&token) {
+                    Some(image) => Sprite {
+                        image,
                         // Left for `size_tokens_to_grid` to set once the
                         // image's real dimensions are known. Guessing here
                         // would just be overwritten a frame later.

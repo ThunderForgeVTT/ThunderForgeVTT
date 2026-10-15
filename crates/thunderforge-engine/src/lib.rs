@@ -77,3 +77,6 @@ mod startup;
 
 mod app;
 pub(crate) use app::*;
+
+mod token_art;
+pub(crate) use token_art::*;

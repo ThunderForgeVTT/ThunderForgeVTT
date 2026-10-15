@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { createHero, PRESET_HEROES, type HeroSpec } from "@thunderforge/heroes";
 import { holderId, sendAs, take, type Send } from "../engine/host.ts";
 import type { Progress } from "../engine/loadEngine.ts";
 import { PARTY, type PartyHero } from "../room/party.ts";
+import { rasterize, svgUrl } from "./heroArt.ts";
 import "./page-table.css";
 import { along, fraction, pathDown, toWorld, wallsOf, type Box, type Doc, type Pt } from "./journey.ts";
 
@@ -13,6 +15,12 @@ import { along, fraction, pathDown, toWorld, wallsOf, type Box, type Doc, type P
 // The camera is locked to the page, so the engine's grid is the page's grid.
 //
 // Touch first: a tap on the mat walks the hero there, on any screen.
+//
+// The hero builder is on the page too: a hero built in the note is drawn
+// to pixels here and handed to the engine as bytes (`photoData`), so the
+// walker can be anyone, not only the four with art on disk.
+
+const HeroBuilder = lazy(() => import("./HeroBuilder.tsx"));
 
 const PAGE = "page-table";
 const WALKER = "walker";
@@ -47,26 +55,44 @@ function measure(): { boxes: Box[]; doc: Doc } {
   return { boxes, doc };
 }
 
-function heroToken(hero: PartyHero, at: Pt) {
+/** Who walks: one of the party, or a hero built here (`data`: PNG base64). */
+interface Walker extends PartyHero {
+  data?: string;
+}
+
+/** The pixel size the built hero is drawn at: crisp in a cell on a 3x screen. */
+const ART_PX = 192;
+
+/** `withArt` only when the art changed: the move loop sends this every frame,
+ * and a `photoData` the engine must decode is not for every frame. */
+function heroToken(hero: Walker, at: Pt, withArt = false) {
+  const art = !withArt ? {} : hero.data ? { photoData: hero.data } : { photoUrl: hero.art };
   return {
     type: "upsert_token",
-    token: { id: WALKER, x: at.x, y: at.y, z: 10, label: hero.name, tokenType: "character", photoUrl: hero.art },
+    token: { id: WALKER, x: at.x, y: at.y, z: 10, label: hero.name, tokenType: "character", ...art },
   };
+}
+
+function presetSpec(slug: string): HeroSpec {
+  return PRESET_HEROES.find((p) => p.slug === slug)?.spec ?? { name: "Someone" };
 }
 
 export default function PageTable() {
   const [phase, setPhase] = useState<Phase>("idle");
   const [why, setWhy] = useState("");
   const [progress, setProgress] = useState<Progress | null>(null);
-  const [hero, setHero] = useState<PartyHero>(() => PARTY[Math.floor(Math.random() * PARTY.length)]!);
+  const [hero, setHero] = useState<Walker>(() => PARTY[Math.floor(Math.random() * PARTY.length)]!);
   const [pct, setPct] = useState(0);
   const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<"party" | "build">("party");
+  const [spec, setSpec] = useState<HeroSpec>(() => presetSpec(hero.slug));
+  const [busy, setBusy] = useState(false);
   const stage = useRef<HTMLDivElement>(null);
 
   // What the frame loop and the listeners read; never a stale render's copy.
   const live = useRef({
     phase: "idle" as Phase,
-    hero: PARTY[0]!,
+    hero: PARTY[0]! as Walker,
     doc: { w: 1, h: 1 } as Doc,
     path: [] as Pt[],
     wallIds: [] as string[],
@@ -130,7 +156,7 @@ export default function PageTable() {
       const L = live.current;
       layout();
       L.pos = { ...L.target };
-      s(heroToken(L.hero, toWorld(L.pos, L.doc)));
+      s(heroToken(L.hero, toWorld(L.pos, L.doc), true));
       s({ type: "set_controlled_token", tokenId: WALKER });
       s({ type: "set_scene_playing", playing: true });
       aim();
@@ -258,10 +284,26 @@ export default function PageTable() {
     return () => cancelAnimationFrame(raf);
   }, [send]);
 
-  const pick = (h: PartyHero) => {
+  const pick = (h: Walker) => {
     setHero(h);
     live.current.hero = h;
-    if (live.current.phase === "running") send(heroToken(h, toWorld(live.current.pos, live.current.doc)));
+    if (!h.data) setSpec(presetSpec(h.slug));
+    if (live.current.phase === "running") send(heroToken(h, toWorld(live.current.pos, live.current.doc), true));
+  };
+
+  /** The built hero, drawn to pixels and sent to walk. */
+  const apply = async () => {
+    setBusy(true);
+    try {
+      const svg = createHero(spec).token();
+      const data = await rasterize(svg, ART_PX);
+      pick({ slug: "built", name: spec.name.trim() || "Someone", art: svgUrl(svg), data });
+      setOpen(false);
+    } catch (err) {
+      setWhy(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const status =
@@ -288,7 +330,7 @@ export default function PageTable() {
         aria-hidden="true"
       />
       <aside
-        className={`journey${open ? " journey--open" : ""}`}
+        className={`journey${open ? " journey--open" : ""}${open && mode === "build" ? " journey--build" : ""}`}
         role="progressbar"
         aria-label="How far down the page"
         aria-valuemin={0}
@@ -312,23 +354,47 @@ export default function PageTable() {
           </div>
           <p className="journey-status">{status}</p>
         </div>
-        <ul className="journey-party" aria-label="Your hero">
-          {PARTY.map((h) => (
-            <li key={h.slug}>
-              <button
-                type="button"
-                aria-pressed={h.slug === hero.slug}
-                title={h.name}
-                onClick={() => {
-                  pick(h);
-                  setOpen(false);
-                }}
-              >
-                <img src={h.art} alt={h.name} width={36} height={36} />
-              </button>
-            </li>
-          ))}
-        </ul>
+        {open && (
+          <div className="journey-tools" role="tablist" aria-label="Who walks">
+            <button type="button" role="tab" aria-pressed={mode === "party"} onClick={() => setMode("party")}>
+              The party
+            </button>
+            <button type="button" role="tab" aria-pressed={mode === "build"} onClick={() => setMode("build")}>
+              Build a hero
+            </button>
+          </div>
+        )}
+        {mode === "party" && (
+          <ul className="journey-party" aria-label="Your hero">
+            {PARTY.map((h) => (
+              <li key={h.slug}>
+                <button
+                  type="button"
+                  aria-pressed={h.slug === hero.slug}
+                  title={h.name}
+                  onClick={() => {
+                    pick(h);
+                    setOpen(false);
+                  }}
+                >
+                  <img src={h.art} alt={h.name} width={36} height={36} />
+                </button>
+              </li>
+            ))}
+            {hero.data && (
+              <li>
+                <button type="button" aria-pressed title={hero.name}>
+                  <img src={hero.art} alt={hero.name} width={36} height={36} />
+                </button>
+              </li>
+            )}
+          </ul>
+        )}
+        {open && mode === "build" && (
+          <Suspense fallback={<p className="journey-status">Fetching the parts…</p>}>
+            <HeroBuilder spec={spec} onChange={setSpec} onApply={() => void apply()} busy={busy} />
+          </Suspense>
+        )}
       </aside>
     </>
   );
