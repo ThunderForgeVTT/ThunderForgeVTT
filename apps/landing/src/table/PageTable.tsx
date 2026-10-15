@@ -9,6 +9,7 @@ import "./page-table.css";
 import { currentMat, watchMat } from "./heroMat.ts";
 import {
   along,
+  dawning,
   duskAt,
   fraction,
   pathDown,
@@ -45,6 +46,14 @@ const GRID_INK = "#1f2a2e2e";
 const GRID_CHALK = "#eceee924";
 /** Past this much dusk the page's words go light (`html.dusk`). */
 const LIGHTS_ON = 0.8;
+/**
+ * Past this much dusk the torches are lit and the mat is firelit; they burn
+ * up to full by `LIGHTS_ON`. At dawn they go out before the day mat returns,
+ * so a torch never pools white on paper.
+ */
+const EMBERS = 0.5;
+/** The dark as dawn breaks: amber, warming the paper rather than greying it. */
+const DAWN_TINT = "#4a2c14";
 /** What a tap on counts as the table, not the page's words. */
 const SURFACES = "html, body, main, header.hero, .hero-body, .section";
 
@@ -124,9 +133,14 @@ export default function PageTable() {
     /** Where day ends and the night is deepest, in scroll pixels. */
     dayEnds: 0,
     nightAt: 1,
+    dawnAt: 2,
+    /** The torches, in page pixels. */
+    torchAt: [] as Pt[],
     /** The dusk last sent, and how many torches are on the table. */
     shade: -1,
     torches: 0,
+    /** How brightly the torches burn, in eighths. */
+    glow: 0,
   });
   live.current.hero = hero;
 
@@ -193,46 +207,64 @@ export default function PageTable() {
     [send],
   );
 
+  /** Torch `i`, burning at `glow` (0 out, 1 full); the engine makes it flicker. */
+  const torch = useCallback(
+    (i: number, glow: number) => {
+      const L = live.current;
+      const at = toWorld(L.torchAt[i]!, L.doc);
+      send({
+        type: "upsert_light",
+        light: {
+          id: `torch-${i}`,
+          x: at.x,
+          y: at.y,
+          radius: L.cell * 2,
+          brightRadius: L.cell * 0.6,
+          color: "#ffd9a8",
+          intensity: glow,
+          flicker: 0.7,
+          castsShadows: false,
+        },
+      });
+    },
+    [send],
+  );
+
   /** Torches at every section's head, and a lantern in the walker's hand. */
   const light = useCallback(
     (boxes: Box[]) => {
       const L = live.current;
       const torches = torchesAlong(boxes, L.doc, L.cell);
-      torches.forEach((p, i) => {
-        const at = toWorld(p, L.doc);
-        send({
-          type: "upsert_light",
-          light: {
-            id: `torch-${i}`,
-            x: at.x,
-            y: at.y,
-            radius: L.cell * 2,
-            brightRadius: L.cell * 0.6,
-            color: "#ffb35c",
-            intensity: 1,
-            castsShadows: false,
-          },
-        });
-      });
+      L.torchAt = torches;
+      torches.forEach((_, i) => torch(i, L.glow));
       for (let i = torches.length; i < L.torches; i++) send({ type: "remove_light", lightId: `torch-${i}` });
       L.torches = torches.length;
       send({ type: "set_carried_light", tokenId: WALKER, bright: L.cell * 0.6, dim: L.cell * 1.6 });
     },
-    [send],
+    [send, torch],
   );
 
   /** The dusk for where the visitor has scrolled to; the words light up past `LIGHTS_ON`. */
   const dusk = useCallback(() => {
     const L = live.current;
-    const shade = duskAt(window.scrollY, L.dayEnds, L.nightAt, window.innerHeight);
+    const vh = window.innerHeight;
+    const shade = duskAt(window.scrollY, L.dayEnds, L.nightAt, L.dawnAt, vh);
     if (Math.abs(shade - L.shade) < 0.01 && (shade > 0 || L.shade === 0)) return;
-    const wasNight = L.shade > LIGHTS_ON;
+    const wasLit = L.shade > EMBERS;
     L.shade = shade;
-    send({ type: "set_ambient_light", level: "bright", shade });
-    const night = shade > LIGHTS_ON;
-    document.documentElement.classList.toggle("dusk", night);
-    if (night !== wasNight) grid(night);
-  }, [send, grid]);
+    // The night is blue; as dawn breaks the dark warms to amber.
+    const color = dawning(window.scrollY, L.dawnAt, vh) > 0 ? DAWN_TINT : undefined;
+    send({ type: "set_ambient_light", level: "bright", shade, color });
+    document.documentElement.classList.toggle("dusk", shade > LIGHTS_ON);
+    const lit = shade > EMBERS;
+    if (lit !== wasLit) grid(lit);
+    // The torches catch and gutter in steps: each step is a changed light set.
+    const glow = Math.round(Math.min(1, Math.max(0, (shade - EMBERS) / (LIGHTS_ON - EMBERS))) * 8) / 8;
+    if (glow !== L.glow) {
+      L.glow = glow;
+      L.torchAt.forEach((_, i) => torch(i, glow));
+    }
+  }, [send, grid, torch]);
 
   /** Measures the page and sends it as a scene: grid, mat, the room. */
   const layout = useCallback(() => {
@@ -247,7 +279,9 @@ export default function PageTable() {
     const room = boxes.find((b) => b.id === "room");
     L.dayEnds = first ? first.y + first.h - vh / 2 : 0;
     L.nightAt = room ? room.y - vh / 4 : doc.h;
-    grid(L.shade > LIGHTS_ON);
+    const support = boxes.find((b) => b.id === "support");
+    L.dawnAt = support ? Math.min(support.y - vh / 4, doc.h - vh) : doc.h * 2;
+    grid(L.shade > EMBERS);
     light(boxes);
     if (!L.free) L.target = along(L.path, fraction(window.scrollY, doc, window.innerHeight));
     drawMat();
@@ -276,6 +310,7 @@ export default function PageTable() {
     const L = live.current;
     for (let i = 0; i < L.torches; i++) s({ type: "remove_light", lightId: `torch-${i}` });
     L.torches = 0;
+    L.glow = 0;
     s({ type: "set_carried_light", tokenId: WALKER, bright: 0, dim: 0 });
     s({ type: "set_ambient_light", level: "bright" });
     L.shade = -1;

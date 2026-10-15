@@ -92,16 +92,30 @@ export const NIGHT = 0.985;
 /**
  * The dusk over the page at `scrollY`, 0 (daylight) to `NIGHT`. Day holds
  * until `dayEnds`, the evening falls within half a screen after it, and the
- * night deepens slowly until `nightAt`, the room, and stays.
+ * night deepens slowly until `nightAt`, the room. Dawn breaks over the screen
+ * before `dawnAt` and it is day again by it.
  */
-export function duskAt(scrollY: number, dayEnds: number, nightAt: number, viewportH: number): number {
-  if (scrollY <= dayEnds) return 0;
+export function duskAt(
+  scrollY: number,
+  dayEnds: number,
+  nightAt: number,
+  dawnAt: number,
+  viewportH: number,
+): number {
+  if (scrollY <= dayEnds || scrollY >= dawnAt) return 0;
   const fall = Math.min(1, (scrollY - dayEnds) / (viewportH / 2));
-  if (fall < 1) return EVENING * fall * fall * (3 - 2 * fall);
   const span = Math.max(1, nightAt - dayEnds - viewportH / 2);
   const deep = Math.min(1, (scrollY - dayEnds - viewportH / 2) / span);
-  return EVENING + (NIGHT - EVENING) * deep;
+  const dark = fall < 1 ? EVENING * smooth(fall) : EVENING + (NIGHT - EVENING) * deep;
+  return dark * (1 - smooth(dawning(scrollY, dawnAt, viewportH)));
 }
+
+/** How far dawn has broken at `scrollY`, 0 (night) to 1 (day, at `dawnAt`). */
+export function dawning(scrollY: number, dawnAt: number, viewportH: number): number {
+  return Math.min(1, Math.max(0, 1 - (dawnAt - scrollY) / viewportH));
+}
+
+const smooth = (t: number) => t * t * (3 - 2 * t);
 
 /**
  * A pair of torches in the gap above every section after the first, one at
