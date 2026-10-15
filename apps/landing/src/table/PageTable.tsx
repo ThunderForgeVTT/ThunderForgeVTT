@@ -7,7 +7,17 @@ import { rasterize, svgUrl } from "./heroArt.ts";
 import { announcePage, PAGE_TABLE } from "./onPage.ts";
 import "./page-table.css";
 import { currentMat, watchMat } from "./heroMat.ts";
-import { along, fraction, pathDown, toWorld, type Box, type Doc, type Pt } from "./journey.ts";
+import {
+  along,
+  duskAt,
+  fraction,
+  pathDown,
+  toWorld,
+  torchesAlong,
+  type Box,
+  type Doc,
+  type Pt,
+} from "./journey.ts";
 import { centreOf, MatScene } from "./matScene.ts";
 
 // Prototype: the whole page on the engine's table.
@@ -31,6 +41,10 @@ const WALKER = "walker";
 const REDUCE = "(prefers-reduced-motion: reduce)";
 /** The grid's ink on the paper mat: the page's black, faint. */
 const GRID_INK = "#1f2a2e2e";
+/** The same grid after dark: chalk instead of ink. */
+const GRID_CHALK = "#eceee924";
+/** Past this much dusk the page's words go light (`html.dusk`). */
+const LIGHTS_ON = 0.8;
 /** What a tap on counts as the table, not the page's words. */
 const SURFACES = "html, body, main, header.hero, .hero-body, .section";
 
@@ -107,6 +121,12 @@ export default function PageTable() {
     target: { x: 0, y: 0 } as Pt,
     free: false,
     cell: 48,
+    /** Where day ends and the night is deepest, in scroll pixels. */
+    dayEnds: 0,
+    nightAt: 1,
+    /** The dusk last sent, and how many torches are on the table. */
+    shade: -1,
+    torches: 0,
   });
   live.current.hero = hero;
 
@@ -149,6 +169,71 @@ export default function PageTable() {
     if (!L.free) L.target = along(L.path, fraction(window.scrollY, L.doc, window.innerHeight));
   }, []);
 
+  /** The page's grid, in ink by day and chalk by night. */
+  const grid = useCallback(
+    (night: boolean) => {
+      const L = live.current;
+      send({
+        type: "set_scene_grid",
+        gridType: "square",
+        size: L.cell,
+        mapWidth: L.doc.w,
+        mapHeight: L.doc.h,
+        visible: true,
+        color: night ? GRID_CHALK : GRID_INK,
+      });
+      // By night the mat is lit only where a flame reaches it: firelight.
+      send({
+        type: "set_scene_background",
+        backgroundImagePath: night ? "/table/mat-night.png" : "/table/mat.png",
+        width: L.doc.w,
+        height: L.doc.h,
+      });
+    },
+    [send],
+  );
+
+  /** Torches at every section's head, and a lantern in the walker's hand. */
+  const light = useCallback(
+    (boxes: Box[]) => {
+      const L = live.current;
+      const torches = torchesAlong(boxes, L.doc, L.cell);
+      torches.forEach((p, i) => {
+        const at = toWorld(p, L.doc);
+        send({
+          type: "upsert_light",
+          light: {
+            id: `torch-${i}`,
+            x: at.x,
+            y: at.y,
+            radius: L.cell * 2,
+            brightRadius: L.cell * 0.6,
+            color: "#ffb35c",
+            intensity: 1,
+            castsShadows: false,
+          },
+        });
+      });
+      for (let i = torches.length; i < L.torches; i++) send({ type: "remove_light", lightId: `torch-${i}` });
+      L.torches = torches.length;
+      send({ type: "set_carried_light", tokenId: WALKER, bright: L.cell * 0.6, dim: L.cell * 1.6 });
+    },
+    [send],
+  );
+
+  /** The dusk for where the visitor has scrolled to; the words light up past `LIGHTS_ON`. */
+  const dusk = useCallback(() => {
+    const L = live.current;
+    const shade = duskAt(window.scrollY, L.dayEnds, L.nightAt, window.innerHeight);
+    if (Math.abs(shade - L.shade) < 0.01 && (shade > 0 || L.shade === 0)) return;
+    const wasNight = L.shade > LIGHTS_ON;
+    L.shade = shade;
+    send({ type: "set_ambient_light", level: "bright", shade });
+    const night = shade > LIGHTS_ON;
+    document.documentElement.classList.toggle("dusk", night);
+    if (night !== wasNight) grid(night);
+  }, [send, grid]);
+
   /** Measures the page and sends it as a scene: grid, mat, the room. */
   const layout = useCallback(() => {
     const L = live.current;
@@ -157,23 +242,22 @@ export default function PageTable() {
     L.doc = doc;
     L.rest = pathDown(boxes, doc, L.cell);
     L.path = L.rest;
-    send({
-      type: "set_scene_grid",
-      gridType: "square",
-      size: L.cell,
-      mapWidth: doc.w,
-      mapHeight: doc.h,
-      visible: true,
-      color: GRID_INK,
-    });
-    send({ type: "set_scene_background", backgroundImagePath: "/table/mat.png", width: doc.w, height: doc.h });
+    const vh = window.innerHeight;
+    const first = boxes[0];
+    const room = boxes.find((b) => b.id === "room");
+    L.dayEnds = first ? first.y + first.h - vh / 2 : 0;
+    L.nightAt = room ? room.y - vh / 4 : doc.h;
+    grid(L.shade > LIGHTS_ON);
+    light(boxes);
     if (!L.free) L.target = along(L.path, fraction(window.scrollY, doc, window.innerHeight));
     drawMat();
     // The world's origin is the page's middle, so a page that grew moved
     // everything on it: a hero standing still must be told where it is now.
     if (L.phase === "running") send(heroToken(L.hero, toWorld(L.pos, doc)));
+    L.shade = -1;
+    dusk();
     aim();
-  }, [send, aim, drawMat]);
+  }, [send, aim, drawMat, grid, light, dusk]);
 
   const setup = useCallback(
     (s: Send) => {
@@ -189,6 +273,13 @@ export default function PageTable() {
   );
 
   const teardown = useCallback((s: Send) => {
+    const L = live.current;
+    for (let i = 0; i < L.torches; i++) s({ type: "remove_light", lightId: `torch-${i}` });
+    L.torches = 0;
+    s({ type: "set_carried_light", tokenId: WALKER, bright: 0, dim: 0 });
+    s({ type: "set_ambient_light", level: "bright" });
+    L.shade = -1;
+    document.documentElement.classList.remove("dusk");
     s({ type: "set_scene_playing", playing: false });
     s({ type: "remove_token", tokenId: WALKER });
     mat.current!.clear();
@@ -251,12 +342,13 @@ export default function PageTable() {
       if (L.phase !== "running") return;
       L.free = false;
       L.target = along(L.path, t);
+      dusk();
       aim();
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     onScroll();
     return () => window.removeEventListener("scroll", onScroll);
-  }, [aim, boot]);
+  }, [aim, boot, dusk]);
 
   // A tap on the mat walks the hero there.
   useEffect(() => {

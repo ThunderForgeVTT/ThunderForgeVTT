@@ -263,3 +263,78 @@ body.in-engine .hero .token img {
   font-family: var(--font-marker);
   color: var(--text-blue);
 }
+
+/* Dusk (`PageTable.tsx`): the engine darkens the mat as the visitor goes
+   down the page and torches light the way. Past the first of the evening
+   the words go light, the paper goes dark, and the inks brighten to stay
+   readable on it. The inks are registered so the change fades, not snaps. */
+@property --text {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #1f2a2e;
+}
+@property --text-soft {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #4a5759;
+}
+@property --text-blue {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #2457b5;
+}
+@property --ink-black {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #1f2a2e;
+}
+@property --ink-blue {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #2a62c9;
+}
+@property --paper {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #fbfbf8;
+}
+@property --mat {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #eceee9;
+}
+
+:root {
+  transition:
+    --text 0.8s ease,
+    --text-soft 0.8s ease,
+    --text-blue 0.8s ease,
+    --ink-black 0.8s ease,
+    --ink-blue 0.8s ease,
+    --paper 0.8s ease,
+    --mat 0.8s ease;
+}
+:root.dusk {
+  color-scheme: dark;
+  --mat: #1b2124;
+  --mat-deep: #151a1c;
+  --paper: #222a2e;
+  --ink-black: #e9e5da;
+  --ink-blue: #7fa6f2;
+  --ink-red: #f0857a;
+  --ink-green: #6fcf8f;
+  --text: #ece8de;
+  --text-soft: #b9c0bd;
+  --text-blue: #93b4f5;
+  --text-red: #f39a90;
+  --text-green: #86d9a1;
+}
+:root.dusk .marker-head {
+  /* Firelight on the headings. */
+  text-shadow: 0 0 18px rgb(255 179 92 / 0.28);
+}
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    transition: none;
+  }
+}

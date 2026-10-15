@@ -80,3 +80,42 @@ export function fraction(scrollY: number, doc: Doc, viewportH: number): number {
   if (span <= 0) return 1;
   return Math.min(1, Math.max(0, scrollY / span));
 }
+
+/**
+ * How dark it has got by the first screen's end, and by the room. The engine
+ * blends its darkness in linear light, so what looks like evening on screen
+ * takes far more than half of it.
+ */
+export const EVENING = 0.95;
+export const NIGHT = 0.985;
+
+/**
+ * The dusk over the page at `scrollY`, 0 (daylight) to `NIGHT`. Day holds
+ * until `dayEnds`, the evening falls within half a screen after it, and the
+ * night deepens slowly until `nightAt`, the room, and stays.
+ */
+export function duskAt(scrollY: number, dayEnds: number, nightAt: number, viewportH: number): number {
+  if (scrollY <= dayEnds) return 0;
+  const fall = Math.min(1, (scrollY - dayEnds) / (viewportH / 2));
+  if (fall < 1) return EVENING * fall * fall * (3 - 2 * fall);
+  const span = Math.max(1, nightAt - dayEnds - viewportH / 2);
+  const deep = Math.min(1, (scrollY - dayEnds - viewportH / 2) / span);
+  return EVENING + (NIGHT - EVENING) * deep;
+}
+
+/**
+ * A pair of torches in the gap above every section after the first, one at
+ * each edge of the page: their light falls on the margins and the gaps, not
+ * on the words.
+ */
+export function torchesAlong(boxes: Box[], doc: Doc, cell: number): Pt[] {
+  return boxes.slice(1).flatMap((box, i) => {
+    const above = boxes[i]!;
+    const y = (above.y + above.h + box.y) / 2;
+    const edge = Math.max(cell * 0.25, Math.min(box.x, above.x) / 2);
+    return [
+      { x: edge, y },
+      { x: doc.w - edge, y },
+    ];
+  });
+}
