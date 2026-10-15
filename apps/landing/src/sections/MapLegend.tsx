@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { CC_BY_SA, DEMO, MAPS_CATALOG, MAPS_SOURCE } from "../links.ts";
+import { announcePick } from "../table/mapPick.ts";
 
 // The demo world's own maps, each with its own walls, doors and lights laid
 // over it in marker: the geometry the server enforces, read from the generated
@@ -171,6 +172,10 @@ export default function MapLegend() {
   }, []);
 
   const entry = atlas?.[pick] ?? null;
+  // The hero on the page goes to stand under the new pick (spec 098).
+  useEffect(() => {
+    if (atlas) announcePick();
+  }, [atlas, pick]);
   useEffect(() => {
     if (!entry || maps[entry.name]) return;
     let live = true;
@@ -252,9 +257,18 @@ export default function MapLegend() {
                   onClick={() => setPick(i)}
                   // The browser leaves a tile with a sliver showing where it
                   // is, so Tab along the strip would land on hidden tiles.
-                  onFocus={(ev) =>
-                    ev.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest" })
-                  }
+                  // To the tile's snap point: "nearest" moves the strip a
+                  // sliver, and the mandatory snap pulls it straight back.
+                  // Keyboard focus only: a pressed tile that jumped would
+                  // leave the release on its neighbour.
+                  onFocus={(ev) => {
+                    const t = ev.currentTarget;
+                    if (!t.matches(":focus-visible")) return;
+                    const b = t.getBoundingClientRect();
+                    const s = t.closest("ul")!.getBoundingClientRect();
+                    const shown = b.left >= s.left - 1 && b.right <= s.right + 1;
+                    t.scrollIntoView({ block: "nearest", inline: shown ? "nearest" : "start" });
+                  }}
                   onPointerEnter={() => void loadGeometry(e.name).catch(() => undefined)}
                 >
                   <img

@@ -23,8 +23,12 @@ impl Plugin for CameraPlugin {
                     // one sees the drag as live and stands aside for it.
                     apply_requested_focus,
                     // Last, so a zoom applied this frame reaches the camera
-                    // in the same frame rather than a frame late.
-                    update_camera_transform,
+                    // in the same frame rather than a frame late; after the
+                    // page's commands too, whose `fit_camera_to` says
+                    // `cameraFitted` in this update and moves the page's
+                    // window to match. A frame late, the lights blinked a
+                    // cell away on every jump.
+                    update_camera_transform.after(crate::app::ExternalCommandsApplied),
                 )
                     .chain(),
             );
@@ -278,6 +282,57 @@ mod tests {
         let camera_mgr = app.world().resource::<CameraManager>();
         assert_eq!(camera_mgr.translation, Vec2::ZERO);
         assert_eq!(camera_mgr.scale, 1.0);
+    }
+
+    /// The fit a page asked for, applied the way `apply_external_commands`
+    /// applies `fit_camera_to`.
+    #[derive(Resource, Default)]
+    struct AskedFit(Option<Vec2>);
+
+    fn fit_as_commanded(mut asked: ResMut<AskedFit>, mut camera_mgr: ResMut<CameraManager>) {
+        if let Some(center) = asked.0.take() {
+            camera_mgr.fit_and_hold(
+                center,
+                Vec2::new(400.0, 800.0),
+                Some(Vec2::new(400.0, 800.0)),
+                true,
+            );
+        }
+    }
+
+    /// The landing moves its canvas on `cameraFitted`, said from the update
+    /// that applies the fit; a camera that took the fit a frame later showed
+    /// every light a grid cell off for that frame (the scroll window's jump).
+    #[test]
+    fn an_immediate_fit_reaches_the_camera_in_the_same_update() {
+        for _ in 0..3 {
+            let mut app = App::new();
+            app.add_plugins(MinimalPlugins);
+            app.add_plugins(bevy::input::InputPlugin);
+            app.init_resource::<SelectedLight>();
+            app.init_resource::<AskedFit>();
+            // Added first: unordered, the executor ran it after the camera.
+            app.add_systems(
+                Update,
+                fit_as_commanded.in_set(crate::app::ExternalCommandsApplied),
+            );
+            app.add_plugins(CameraPlugin);
+            // As on the web, where wasm runs one system at a time.
+            app.edit_schedule(Update, |schedule| {
+                schedule.set_executor(bevy::ecs::schedule::SingleThreadedExecutor::new());
+            });
+            app.update();
+            for step in 1..=5 {
+                let center = Vec2::new(200.0, -48.0 * step as f32);
+                app.world_mut().resource_mut::<AskedFit>().0 = Some(center);
+                app.update();
+                let mut cameras = app
+                    .world_mut()
+                    .query_filtered::<&Transform, With<Camera2d>>();
+                let at = cameras.single(app.world()).unwrap().translation.truncate();
+                assert_eq!(at, center, "the camera drew the fit a frame late");
+            }
+        }
     }
 
     /// A headless app with a primary window whose cursor this test moves.

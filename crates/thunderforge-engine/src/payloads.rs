@@ -142,6 +142,10 @@ pub(crate) struct WorldTokenPayload {
     /// list is the one that clears them.
     #[serde(default)]
     pub(crate) conditions: Option<Vec<ConditionPayload>>,
+    /// Spec 096: the host says this token is down (greyed under a skull)
+    /// or up. Absent leaves it as it was, the way `conditions` does.
+    #[serde(default)]
+    pub(crate) defeated: Option<bool>,
     /// Who owns the token (spec 085): a player's box takes only their own.
     ///
     /// Three states, because a positional update says nothing about the
@@ -247,6 +251,9 @@ pub(crate) struct WorldLightPayload {
     pub(crate) attached_token_id: Option<String>,
     #[serde(rename = "castsShadows")]
     pub(crate) casts_shadows: bool,
+    /// Lit by night only, with the clock (spec 099 US3).
+    #[serde(rename = "byNight", default)]
+    pub(crate) by_night: bool,
 }
 
 /// Confirmed/authoritative shape state from the server (T053), matching
@@ -389,6 +396,8 @@ pub(crate) enum ExternalCommand {
         path: Option<String>,
         width: f32,
         height: f32,
+        /// The map by night (spec 099), from `nightImagePath`.
+        night_path: Option<String>,
     },
     /// FR-010: whether the local session may author walls/shapes
     /// (`WallPlugin`/`ShapePlugin` gate all authoring input on
@@ -582,6 +591,12 @@ pub(crate) enum ExternalCommand {
     /// throw that starts.
     SetReducedMotion {
         reduced: bool,
+    },
+    /// The table's hour (spec 099): at once, or over `over_secs`. Hours past
+    /// 24 are the next day. `None` takes the clock away.
+    SetTimeOfDay {
+        hour: Option<f32>,
+        over_secs: Option<f32>,
     },
     /// Whether to draw at all (spec 090). Off waits for the next command;
     /// see `plugins/render_pause.rs`.

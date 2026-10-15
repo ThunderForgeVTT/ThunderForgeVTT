@@ -1,27 +1,53 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { createHero, PRESET_HEROES, type HeroSpec } from "@thunderforge/heroes";
-import { canvasOf, holderId, sendAs, take, type Send } from "../engine/host.ts";
+import { canvasOf, holderId, running, sendAs, take, type Send } from "../engine/host.ts";
 import { listen } from "../engine/dispatch.ts";
 import type { Progress } from "../engine/loadEngine.ts";
 import { PARTY } from "../room/party.ts";
-import { journeyHero, setJourneyHero, type Walker } from "./journeyHero.ts";
+import { journeyHero, setJourneyHero, watchJourneyHero, type Walker } from "./journeyHero.ts";
 import { rasterize, svgUrl } from "./heroArt.ts";
 import { announcePage, PAGE_TABLE } from "./onPage.ts";
 import "./page-table.css";
 import { currentMat, watchMat } from "./heroMat.ts";
 import {
   along,
-  dawning,
-  duskAt,
   fraction,
+  hourAt,
   pathDown,
   toWorld,
+  fromWorld,
+  tableHeight,
   torchesAlong,
   type Box,
   type Doc,
   type Pt,
 } from "./journey.ts";
+import { darknessAt } from "./daylight.ts";
+import { downAt } from "./goblins.ts";
 import { centreOf, MatScene } from "./matScene.ts";
+import { pickedTile, watchPick } from "./mapPick.ts";
+import { currentBoard, leftAt, seat, seatedAt, watchBoard, type Board } from "../room/pageBoard.ts";
+import { BoardArt, boardHold, blockedCells, boardStops, inside, placeOf, standUp } from "./roomOnPage.ts";
+import {
+  beforeCamp,
+  CAMP_FIRE,
+  CAMP_GLOW,
+  campFire,
+  campMat,
+  campStops,
+  currentCamp,
+  watchCamp,
+} from "./campMat.ts";
+import {
+  buildRoute,
+  pageStations,
+  pointAt,
+  sAt,
+  stepToward,
+  type Planner,
+  type Route,
+  type Station,
+} from "./route.ts";
 
 // Prototype: the whole page on the engine's table.
 //
@@ -47,24 +73,22 @@ const LANTERN = "walker-lantern";
 /** The walker's lantern: enough to find the hero by, never a glare. */
 const LANTERN_GLOW = 0.35;
 const REDUCE = "(prefers-reduced-motion: reduce)";
-/** The grid's ink on the paper mat: the page's black, faint. */
-const GRID_INK = "#1f2a2e2e";
-/** The same grid after dark: chalk instead of ink. */
-const GRID_CHALK = "#eceee924";
-/** Past this much dusk the page's words go light (`html.dusk`). */
+/** The grid: a grey that reads as ink on the day mat and as chalk on the night one,
+ * so it never flips while the engine crossfades them (spec 099 US3). */
+const GRID_INK = "#5f665f38";
+/** Past this much dark the page's words go light (`html.dusk`). */
 const LIGHTS_ON = 0.8;
-/**
- * Past this much dusk the torches are lit and the mat is firelit; they burn
- * up to full by `LIGHTS_ON`. At dawn they go out before the day mat returns,
- * so a torch never pools white on paper.
- */
-const EMBERS = 0.5;
-/** The dark as dawn breaks: amber, warming the paper rather than greying it. */
-const DAWN_TINT = "#4a2c14";
-/** How long the dark takes to catch up with the scroll, in ms (a time constant). */
-const DUSK_MS = 260;
+/** How long the engine's clock takes to reach the hour the scroll asks for, in
+ * seconds: a flick on a phone crosses the evening over time, not in a frame. */
+const CLOCK_SECS = 0.3;
 /** What a tap on counts as the table, not the page's words. */
 const SURFACES = "html, body, main, header.hero, .hero-body, .section";
+
+/** How long the engine takes to hold walls just sent, before a plan round them. */
+const PLAN_AFTER = 150;
+
+/** How long the scroll rests before the page takes the table back. */
+const SETTLE = 300;
 
 type Phase = "idle" | "held" | "loading" | "running" | "away" | "failed";
 
@@ -75,8 +99,11 @@ function cellSize(): number {
   return Number.isFinite(v) && v > 0 ? v : 48;
 }
 
-function measure(): { boxes: Box[]; doc: Doc } {
-  const doc = { w: document.documentElement.clientWidth, h: document.documentElement.scrollHeight };
+function measure(was: Doc): { boxes: Box[]; doc: Doc } {
+  const w = document.documentElement.clientWidth;
+  const h = document.documentElement.scrollHeight;
+  // The origin holds while the width does: new words grow the page, not move it.
+  const doc = { w, h, mid: w === was.w && was.mid > 0 ? was.mid : h / 2 };
   const boxes: Box[] = [];
   document.querySelectorAll<HTMLElement>("[data-section], #tavern, #room").forEach((el) => {
     const r = el.getBoundingClientRect();
@@ -91,6 +118,20 @@ function measure(): { boxes: Box[]; doc: Doc } {
   });
   boxes.sort((a, b) => a.y - b.y);
   return { boxes, doc };
+}
+
+/** Spec 098 FR-007: the cell under the picked atlas tile, held a while. */
+function underPick(cell: number, hold: number): Station[] {
+  const r = pickedTile()?.getBoundingClientRect();
+  if (!r || r.width === 0) return [];
+  const x = Math.floor((r.left + r.width / 2) / cell) * cell + cell / 2;
+  const y = Math.ceil((r.bottom + window.scrollY) / cell) * cell + cell / 2;
+  // On a narrow page the legend lies under the tiles: the hero would stand
+  // behind it, and keeps to its gutter instead.
+  const card = document.querySelector(".legend")?.getBoundingClientRect();
+  const vy = y - window.scrollY;
+  if (card && x > card.left && x < card.right && vy > card.top - cell && vy < card.bottom) return [];
+  return [{ at: { x, y }, hold }];
 }
 
 /** The pixel size the built hero is drawn at: crisp in a cell on a 3x screen. */
@@ -121,12 +162,13 @@ export default function PageTable() {
   const [spec, setSpec] = useState<HeroSpec>(() => presetSpec(hero.slug));
   const [busy, setBusy] = useState(false);
   const stage = useRef<HTMLDivElement>(null);
+  const note = useRef<HTMLElement>(null);
 
   // What the frame loop and the listeners read; never a stale render's copy.
   const live = useRef({
     phase: "idle" as Phase,
     hero: PARTY[0]! as Walker,
-    doc: { w: 1, h: 1 } as Doc,
+    doc: { w: 1, h: 1, mid: 0 } as Doc,
     path: [] as Pt[],
     /** The path below the first screen; `path` is this from the hero's mat spot. */
     rest: [] as Pt[],
@@ -134,33 +176,53 @@ export default function PageTable() {
     target: { x: 0, y: 0 } as Pt,
     free: false,
     cell: 48,
-    /** Where the stage stands on the page, in page pixels. */
+    /** Where the stage stands on the page, and its height, in page pixels. */
     top: 0,
+    stageW: 0,
+    stageH: 0,
     /** Where it moves once the engine draws the camera sent for it. */
     moving: null as number | null,
     /** Where day ends and the night is deepest, in scroll pixels. */
     dayEnds: 0,
     nightAt: 1,
-    dawnAt: 2,
     /** The torches, in page pixels. */
     torchAt: [] as Pt[],
-    /** The dusk last sent, and how many torches are on the table. */
-    shade: -1,
+    /** The hour last sent to the engine's clock (-1: none yet), and how many
+     * torches are on the table. */
+    hour: -1,
     torches: 0,
-    /** How brightly the torches burn, 0 to 1. */
-    glow: 0,
-    /** The dusk the table is fading towards, its tint, and the tint last sent. */
-    goal: 0,
-    tint: undefined as string | undefined,
-    sentTint: undefined as string | undefined,
-    /** Whether a fade is running. */
-    fading: false,
+    /** A wide page's route (spec 098), the hero's distance along it, the
+     * distance the scroll asks for, and whether the hero is on it yet. */
+    route: null as Route | null,
+    s: 0,
+    goalS: 0,
+    joined: true,
+    /** Whether the route waits where it is until the hero is back on it. */
+    rejoin: false,
+    /** The foes that are down, as last sent. */
+    down: "",
+    /** Where the hero stood on the screen when the note last looked. */
+    behind: "",
   });
   live.current.hero = hero;
 
-  const send = useRef<Send>(sendAs(PAGE)).current;
+  const sendAll = useRef<Send>(sendAs(PAGE)).current;
+  /** Sends, and says on the stage where the walker was sent: the engine
+   * snaps it to its square, and the walk's tests want the way it took. */
+  const send = useRef<Send>((command) => {
+    const token = command.token as { id?: string; x?: number; y?: number } | undefined;
+    if (command.type === "upsert_token" && token?.id === WALKER && stage.current) {
+      const at = fromWorld({ x: token.x!, y: token.y! }, live.current.doc);
+      stage.current.dataset.walker = `${Math.round(at.x)},${Math.round(at.y)}`;
+    }
+    sendAll(command);
+  }).current;
   const mat = useRef<MatScene | null>(null);
   mat.current ??= new MatScene(send, () => canvasOf(PAGE) !== null);
+  const camp = useRef<MatScene | null>(null);
+  camp.current ??= new MatScene(send, () => canvasOf(PAGE) !== null, "camp");
+  const boardArt = useRef<BoardArt | null>(null);
+  boardArt.current ??= new BoardArt(send);
 
   const go = useCallback((next: Phase) => {
     live.current.phase = next;
@@ -174,13 +236,16 @@ export default function PageTable() {
     const el = stage.current;
     if (!el) return;
     const { doc } = live.current;
-    const c = toWorld({ x: el.clientWidth / 2, y: top + el.clientHeight / 2 }, doc);
+    // Kept from `size`: a layout read here would force one on every jump.
+    const width = live.current.stageW || el.clientWidth;
+    const height = live.current.stageH || el.clientHeight;
+    const c = toWorld({ x: width / 2, y: top + height / 2 }, doc);
     send({
       type: "fit_camera_to",
       centerX: c.x,
       centerY: c.y,
-      width: el.clientWidth,
-      height: el.clientHeight,
+      width,
+      height,
       immediate: true,
     });
   }, [send]);
@@ -214,7 +279,8 @@ export default function PageTable() {
       const L = live.current;
       const y = window.scrollY;
       const vh = window.innerHeight;
-      const h = el.clientHeight;
+      // Kept from `size`: a layout read here would force one on every scroll.
+      const h = L.stageH || el.clientHeight;
       const margin = (h - vh) / 2;
       const top = Math.max(0, Math.min(Math.floor((y - margin) / L.cell) * L.cell, L.doc.h - h));
       if (force) {
@@ -241,8 +307,11 @@ export default function PageTable() {
       listen(PAGE, (e) => {
         const L = live.current;
         const el = stage.current;
+        // The words go light with the dark the engine draws, not ahead of it.
+        if (e.type === "time_of_day" && e.hour !== null && !seatedAt())
+          document.documentElement.classList.toggle("dusk", e.darkness > LIGHTS_ON);
         if (e.type !== "cameraFitted" || L.moving === null || !el) return;
-        const want = toWorld({ x: 0, y: L.moving + el.clientHeight / 2 }, L.doc).y;
+        const want = toWorld({ x: 0, y: L.moving + (L.stageH || el.clientHeight) / 2 }, L.doc).y;
         if (Math.abs(e.centerY - want) < 0.5) moveTo(L.moving);
       }),
     [moveTo],
@@ -255,8 +324,71 @@ export default function PageTable() {
     const L = live.current;
     const vh = window.innerHeight;
     const margin = Math.max(1, Math.round(vh / 3 / L.cell)) * L.cell;
-    el.style.height = `${Math.min(vh + 2 * margin, L.doc.h)}px`;
+    L.stageH = Math.min(vh + 2 * margin, L.doc.h);
+    el.style.height = `${L.stageH}px`;
+    L.stageW = el.clientWidth;
   }, []);
+
+  /** Where the scroll puts the hero on the route. */
+  const goalOf = useCallback((r: Route) => {
+    const L = live.current;
+    const vh = window.innerHeight;
+    return sAt(r, window.scrollY, vh, Math.max(0, L.doc.h - vh));
+  }, []);
+
+  /** The engine's way round the walls on the table, in page pixels. */
+  const planner = useCallback((): Planner | null => {
+    const e = running();
+    if (!e?.plan_path || canvasOf(PAGE) === null) return null;
+    const L = live.current;
+    const { doc, cell } = L;
+    const grid = { size: cell, originX: -doc.w / 2, originY: doc.mid };
+    const bounds = { min: { q: 0, r: -Math.ceil(doc.h / cell) }, max: { q: Math.ceil(doc.w / cell) - 1, r: -1 } };
+    // Round the dungeon's board and the camp, but straight into them by their top.
+    const maps = [currentBoard(), currentCamp()].filter((m) => m !== null);
+    const blocked = maps.flatMap((m) => blockedCells(m, cell));
+    return (a, b) => {
+      if (maps.some((m) => inside(m, a) || inside(m, b))) return null;
+      const ask = { from: toWorld(a, doc), to: toWorld(b, doc), grid, bounds, blocked, maxNodes: 40000 };
+      const way = (JSON.parse(e.plan_path!(JSON.stringify(ask))) as { path: Pt[] | null }).path;
+      return way?.map((p) => fromWorld(p, doc)) ?? null;
+    };
+  }, []);
+
+  /**
+   * A wide page's route (spec 098): straight at once, then round the walls
+   * once the engine holds them. The hero walks onto each new route from
+   * where it stands, never jumps.
+   */
+  const planned = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const route = useCallback(
+    (seat: Pt | null, exit: Pt) => {
+      const L = live.current;
+      const hold = Math.round(window.innerHeight * 0.2);
+      const stops = () => [
+        ...underPick(L.cell, hold),
+        ...boardStops(currentBoard(), boardHold(window.innerHeight, L.cell)),
+        ...campStops(currentCamp()),
+      ];
+      const stations = () => pageStations(seat, exit, beforeCamp(L.rest, currentCamp()), L.cell, hold, stops());
+      const use = (r: Route) => {
+        L.route = r;
+        L.goalS = goalOf(r);
+        L.s = L.goalS;
+        L.joined = false;
+        L.rejoin = false;
+      };
+      // Straight lines cross the dungeon's board: a planned route stays
+      // until the new plan comes.
+      if (!L.route || !currentBoard()) use(buildRoute(stations(), null));
+      clearTimeout(planned.current);
+      planned.current = setTimeout(() => {
+        const plan = planner();
+        if (plan && live.current.route) use(buildRoute(stations(), plan));
+      }, PLAN_AFTER);
+    },
+    [goalOf, planner],
+  );
 
   /** The first screen's room on the table, and the walker's start in it. */
   const drawMat = useCallback(() => {
@@ -266,37 +398,46 @@ export default function PageTable() {
     const own = L.hero.data ? null : L.hero.slug;
     const spot = m.pieces.find((p) => p.id === own);
     mat.current!.draw(m, L.doc, L.cell, spot ? own : null);
-    L.path = spot ? [centreOf(spot), ...L.rest] : L.rest;
+    boardArt.current!.draw(currentBoard(), L.doc, canvasOf(PAGE) !== null);
+    const c = currentCamp();
+    if (c) camp.current!.draw(campMat(c, own), L.doc, L.cell, null);
+    else camp.current!.clear();
+    if (c) campFire(c, L.doc).forEach(send);
+    else for (const lightId of [CAMP_FIRE, ...CAMP_GLOW]) send({ type: "remove_light", lightId });
+    const from = spot ? [centreOf(spot)] : [];
+    L.path = [...from, ...(m.exit ? [m.exit] : []), ...L.rest];
     if (!L.free) L.target = along(L.path, fraction(window.scrollY, L.doc, window.innerHeight));
-  }, []);
+    if (m.map && m.exit) route(spot ? centreOf(spot) : null, m.exit);
+    else L.route = null;
+  }, [route]);
 
-  /** The page's grid, in ink by day and chalk by night. */
-  const grid = useCallback(
-    (night: boolean) => {
-      const L = live.current;
-      send({
-        type: "set_scene_grid",
-        gridType: "square",
-        size: L.cell,
-        mapWidth: L.doc.w,
-        mapHeight: L.doc.h,
-        visible: true,
-        color: night ? GRID_CHALK : GRID_INK,
-      });
-      // By night the mat is lit only where a flame reaches it: firelight.
-      send({
-        type: "set_scene_background",
-        backgroundImagePath: night ? "/table/mat-night.png" : "/table/mat.png",
-        width: L.doc.w,
-        height: L.doc.h,
-      });
-    },
-    [send],
-  );
+  /** The page's grid and its mat, by day and by night. */
+  const grid = useCallback(() => {
+    const L = live.current;
+    send({
+      type: "set_scene_grid",
+      gridType: "square",
+      size: L.cell,
+      // Its cells start at the page's top left corner.
+      originX: -L.doc.w / 2,
+      originY: L.doc.mid,
+      visible: true,
+      color: GRID_INK,
+    });
+    // By night the mat is lit only where a flame reaches it: firelight. The
+    // engine crossfades the two with its clock (spec 099 US3).
+    send({
+      type: "set_scene_background",
+      backgroundImagePath: "/table/mat.png",
+      nightImagePath: "/table/mat-night.png",
+      width: L.doc.w,
+      height: tableHeight(L.doc),
+    });
+  }, [send]);
 
-  /** Torch `i`, burning at `glow` (0 out, 1 full); the engine makes it flicker. */
+  /** Torch `i`; the engine lights it with the dark and makes it flicker. */
   const torch = useCallback(
-    (i: number, glow: number) => {
+    (i: number) => {
       const L = live.current;
       const at = toWorld(L.torchAt[i]!, L.doc);
       send({
@@ -310,7 +451,9 @@ export default function PageTable() {
           color: "#ffd9a8",
           // Firelight to read by, not to squint at: a full torch burns at
           // `TORCH`, and the words beside it keep their contrast.
-          intensity: glow * TORCH,
+          intensity: TORCH,
+          // Out by day, catching as the dark falls (spec 099 US3).
+          byNight: true,
           flicker: 0.5,
           castsShadows: false,
         },
@@ -325,7 +468,7 @@ export default function PageTable() {
       const L = live.current;
       const torches = torchesAlong(boxes, L.doc, L.cell);
       L.torchAt = torches;
-      torches.forEach((_, i) => torch(i, L.glow));
+      torches.forEach((_, i) => torch(i));
       for (let i = torches.length; i < L.torches; i++) send({ type: "remove_light", lightId: `torch-${i}` });
       L.torches = torches.length;
       // Not a carried light: the engine burns those at full strength, which
@@ -350,63 +493,26 @@ export default function PageTable() {
     [send, torch],
   );
 
-  /** Darkens the table to `shade`: the ambient, the words, the mat and the torches. */
-  const shadeTo = useCallback(
-    (shade: number) => {
-      const L = live.current;
-      if (Math.abs(shade - L.shade) < 0.001 && L.tint === L.sentTint) return;
-      const wasLit = L.shade > EMBERS;
-      L.shade = shade;
-      L.sentTint = L.tint;
-      send({ type: "set_ambient_light", level: "bright", shade, color: L.tint });
-      document.documentElement.classList.toggle("dusk", shade > LIGHTS_ON);
-      const lit = shade > EMBERS;
-      if (lit !== wasLit) grid(lit);
-      // The torches catch and gutter with the dark, in steps fine enough
-      // that no one sees them: each step is a changed light set.
-      const glow = Math.round(Math.min(1, Math.max(0, (shade - EMBERS) / (LIGHTS_ON - EMBERS))) * 32) / 32;
-      if (glow !== L.glow) {
-        L.glow = glow;
-        L.torchAt.forEach((_, i) => torch(i, glow));
-      }
-    },
-    [send, grid, torch],
-  );
-
   /**
-   * The dusk for where the visitor has scrolled to; the words light up past
-   * `LIGHTS_ON`. The dark follows the scroll over time, not in one step: a
-   * flick on a phone crosses the evening within a frame, and the page went
-   * from day to night, and the words from ink to chalk, in a blink.
+   * Sets the engine's clock to the hour for where the visitor has scrolled
+   * to (spec 099 US4). The engine eases the dark, its tint, the mat and the
+   * torches toward that hour itself, a frame at a time: the page only says
+   * what time it is.
    */
-  const dusk = useCallback(() => {
+  const clock = useCallback(() => {
     const L = live.current;
-    const vh = window.innerHeight;
-    L.goal = duskAt(window.scrollY, L.dayEnds, L.nightAt, L.dawnAt, vh);
-    // The night is blue; as dawn breaks the dark warms to amber.
-    L.tint = dawning(window.scrollY, L.dawnAt, vh) > 0 ? DAWN_TINT : undefined;
-    if (L.shade < 0 || matchMedia(REDUCE).matches) {
-      shadeTo(L.goal);
-      return;
-    }
-    if (L.fading) return;
-    L.fading = true;
-    let last = performance.now();
-    const step = (now: number) => {
-      const L = live.current;
-      if (L.phase !== "running") {
-        L.fading = false;
-        return;
-      }
-      const k = 1 - Math.exp(-(now - last) / DUSK_MS);
-      last = now;
-      const next = Math.abs(L.goal - L.shade) < 0.002 ? L.goal : L.shade + (L.goal - L.shade) * k;
-      shadeTo(next);
-      if (next === L.goal) L.fading = false;
-      else requestAnimationFrame(step);
-    };
-    requestAnimationFrame(step);
-  }, [shadeTo]);
+    // The seated dungeon keeps its own dark (spec 098 FR-008).
+    if (seatedAt()) return;
+    const hour = Math.round(hourAt(window.scrollY, L.dayEnds, L.nightAt, window.innerHeight) * 1000) / 1000;
+    if (hour === L.hour) return;
+    const first = L.hour < 0;
+    L.hour = hour;
+    send({
+      type: "set_time_of_day",
+      hour,
+      ...(first || matchMedia(REDUCE).matches ? {} : { overSecs: CLOCK_SECS }),
+    });
+  }, [send]);
 
   /** Measures the page and sends it as a scene: grid, mat, the room. */
   const layout = useCallback(() => {
@@ -414,9 +520,10 @@ export default function PageTable() {
     // Out of the page's way while it is measured, so it never adds to it.
     stage.current?.style.setProperty("top", "0px");
     stage.current?.style.setProperty("height", "0px");
-    const { boxes, doc } = measure();
+    const { boxes, doc } = measure(L.doc);
     L.cell = cellSize();
     L.doc = doc;
+    if (stage.current) stage.current.dataset.mid = `${doc.mid}`;
     size();
     L.rest = pathDown(boxes, doc, L.cell);
     L.path = L.rest;
@@ -425,25 +532,30 @@ export default function PageTable() {
     const room = boxes.find((b) => b.id === "tavern") ?? boxes.find((b) => b.id === "room");
     L.dayEnds = first ? first.y + first.h - vh / 2 : 0;
     L.nightAt = room ? room.y - vh / 4 : doc.h;
-    // The night holds to the page's end: the star chart is in a night sky.
-    L.dawnAt = doc.h * 2;
-    grid(L.shade > EMBERS);
+    grid();
     light(boxes);
     if (!L.free) L.target = along(L.path, fraction(window.scrollY, doc, window.innerHeight));
     drawMat();
-    // The world's origin is the page's middle, so a page that grew moved
-    // everything on it: a hero standing still must be told where it is now.
-    if (L.phase === "running") send(heroToken(L.hero, toWorld(L.pos, doc)));
-    L.shade = -1;
-    dusk();
+    // A new width moves the world's origin, and everything on it: a hero
+    // standing still must be told where it is now.
+    if (L.phase === "running" && !seatedAt()) send(heroToken(L.hero, toWorld(L.pos, doc)));
+    // A seated room whose board moved on the page, or whose world did, sits
+    // down again where the board now lies, or its walls and fog are off the map.
+    const b = currentBoard();
+    const was = seatedAt();
+    const now = b && was ? placeOf(b, doc, L.cell, WALKER) : null;
+    if (now && was && (now.x !== was.x || now.y !== was.y || now.k !== was.k)) seat(now);
+    L.hour = -1;
+    clock();
     place(true);
-  }, [send, place, size, drawMat, grid, light, dusk]);
+  }, [send, place, size, drawMat, grid, light, clock]);
 
   const setup = useCallback(
     (s: Send) => {
       const L = live.current;
       layout();
-      L.pos = { ...L.target };
+      L.pos = L.route ? pointAt(L.route, L.s) : { ...L.target };
+      L.joined = true;
       s(heroToken(L.hero, toWorld(L.pos, L.doc), true));
       s({ type: "set_controlled_token", tokenId: WALKER });
       s({ type: "set_scene_playing", playing: true });
@@ -454,15 +566,21 @@ export default function PageTable() {
 
   const teardown = useCallback((s: Send) => {
     const L = live.current;
+    seat(null);
+    boardArt.current!.clear();
     for (let i = 0; i < L.torches; i++) s({ type: "remove_light", lightId: `torch-${i}` });
     L.torches = 0;
-    L.glow = 0;
     s({ type: "remove_light", lightId: LANTERN });
+    s({ type: "remove_light", lightId: CAMP_FIRE });
+    for (const lightId of CAMP_GLOW) s({ type: "remove_light", lightId });
+    s({ type: "set_time_of_day", hour: null });
     s({ type: "set_ambient_light", level: "bright" });
-    L.shade = -1;
+    L.hour = -1;
     s({ type: "set_scene_playing", playing: false });
     s({ type: "remove_token", tokenId: WALKER });
     mat.current!.clear();
+    camp.current!.clear();
+    L.down = "";
     s({ type: "set_scene_background", backgroundImagePath: null, width: 0, height: 0 });
   }, []);
 
@@ -507,31 +625,43 @@ export default function PageTable() {
   // Scroll drives the journey and the camera; a frame that took the table
   // gives it back once it is well out of view.
   useEffect(() => {
+    let settle: ReturnType<typeof setTimeout> | undefined;
     const onScroll = () => {
       const L = live.current;
-      const doc = { w: document.documentElement.clientWidth, h: document.documentElement.scrollHeight };
-      setPct(Math.round(fraction(window.scrollY, doc, window.innerHeight) * 100));
       const t = fraction(window.scrollY, L.doc, window.innerHeight);
+      setPct(Math.round(t * 100));
+      const shade = darknessAt(hourAt(window.scrollY, L.dayEnds, L.nightAt, window.innerHeight));
+      // For the dusk's tests (SC-006): the dark the page is heading for.
+      if (stage.current) stage.current.dataset.dusk = shade.toFixed(4);
       if (L.phase === "away") {
         // The room holds the table, but the page's night still follows.
-        const shade = duskAt(window.scrollY, L.dayEnds, L.nightAt, L.dawnAt, window.innerHeight);
         document.documentElement.classList.toggle("dusk", shade > LIGHTS_ON);
-        const holder = holderId();
-        const el = holder ? document.getElementById(holder) : null;
-        const r = el?.getBoundingClientRect();
-        if (r && (r.bottom < -window.innerHeight || r.top > 2 * window.innerHeight)) void boot();
+        // Taken back once the scroll settles, not in the middle of a flick.
+        clearTimeout(settle);
+        settle = setTimeout(() => {
+          if (live.current.phase !== "away") return;
+          const holder = holderId();
+          const el = holder ? document.getElementById(holder) : null;
+          const r = el?.getBoundingClientRect();
+          if (r && (r.bottom < -window.innerHeight || r.top > 2 * window.innerHeight)) void boot();
+        }, SETTLE);
         return;
       }
       if (L.phase !== "running") return;
+      if (L.free) L.joined = false;
       L.free = false;
       L.target = along(L.path, t);
-      dusk();
+      if (L.route) L.goalS = goalOf(L.route);
+      clock();
       place();
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     onScroll();
-    return () => window.removeEventListener("scroll", onScroll);
-  }, [place, boot, dusk]);
+    return () => {
+      clearTimeout(settle);
+      window.removeEventListener("scroll", onScroll);
+    };
+  }, [place, boot, clock, goalOf]);
 
   // A tap on the mat walks the hero there.
   useEffect(() => {
@@ -541,6 +671,7 @@ export default function PageTable() {
       const el = e.target as Element | null;
       if (!el || !el.matches(SURFACES)) return;
       L.free = true;
+      L.joined = false;
       L.target = { x: e.pageX, y: e.pageY };
     };
     document.addEventListener("click", onClick);
@@ -562,6 +693,63 @@ export default function PageTable() {
     };
   }, [layout]);
 
+  /** The dungeon's first square on the route, while it has a board. */
+  const startMark = (b: Board | null) =>
+    b && live.current.route?.marks.find((m) => m.hold > 0 && m.at.x === b.start.x && m.at.y === b.start.y);
+
+  /** Spec 098 FR-008: the hero stands still on the dungeon's first square,
+   * and the room sits down to play. */
+  const sit = useCallback(() => {
+    const L = live.current;
+    const b = currentBoard();
+    const m = startMark(b);
+    if (!b || !m || L.free || L.s !== m.s || L.goalS !== m.s || canvasOf(PAGE) === null) return;
+    seat(placeOf(b, L.doc, L.cell, WALKER));
+    // The clock stops: the room's own dark rules until it stands up.
+    send({ type: "set_time_of_day", hour: null });
+    L.hour = -1;
+  }, [send]);
+
+  /** Whether the room stays seated; when not, it stands up, and the walker
+   * walks on from where the room left it, under the page's own dusk. */
+  const stand = useCallback(() => {
+    const L = live.current;
+    const b = currentBoard();
+    const m = startMark(b);
+    if (b && m && !standUp(b, window.scrollY, window.innerHeight, L.cell)) return false;
+    seat(null);
+    const at = leftAt();
+    if (at) L.pos = at;
+    // Back to the first square before on along the route, out by the top:
+    // never straight across the board.
+    if (m) {
+      L.s = m.s;
+      L.rejoin = true;
+    }
+    L.joined = false;
+    L.hour = -1;
+    clock();
+    return true;
+  }, [clock]);
+
+  // The dungeon's board laid or moved: drawn again, and a room seated on
+  // the old place stands up. Played or not changes neither.
+  const boardKey = useRef("");
+  useEffect(
+    () =>
+      watchBoard((b) => {
+        const key = b ? [b.x, b.y, b.w, b.h].join() : "";
+        if (key === boardKey.current) return;
+        boardKey.current = key;
+        if (seatedAt()) {
+          seat(null);
+          live.current.joined = false;
+        }
+        if (live.current.phase === "running") drawMat();
+      }),
+    [drawMat],
+  );
+
   // The walk: the hero closes on the target at a believable pace.
   useEffect(() => {
     let raf = 0;
@@ -569,10 +757,49 @@ export default function PageTable() {
       raf = requestAnimationFrame(step);
       const L = live.current;
       if (L.phase !== "running") return;
+      // The note steps back while the hero stands behind it, unless open.
+      const vy = L.pos.y - window.scrollY;
+      const key = `${Math.round(L.pos.x)},${Math.round(vy)}`;
+      if (note.current && key !== L.behind) {
+        L.behind = key;
+        const r = note.current.getBoundingClientRect();
+        const half = L.cell / 2;
+        const under =
+          L.pos.x + half > r.left && L.pos.x - half < r.right && vy + half > r.top && vy - half < r.bottom;
+        if (under) note.current.dataset.behind = "";
+        else delete note.current.dataset.behind;
+      }
+      if (seatedAt() && !stand()) return;
+      if (L.route && !L.free) {
+        // Along the route, never across it (FR-004).
+        if (!L.rejoin) L.s = stepToward(L.s, L.goalS);
+        L.target = pointAt(L.route, L.s);
+        // The goblins fall as the hero passes them (spec 098 US2).
+        const foes = (currentMat()?.pieces ?? []).filter((p) => p.foe).map((p) => ({ id: p.id, at: centreOf(p) }));
+        const down = downAt(L.route, foes, L.s);
+        const key = [...down].join();
+        if (key !== L.down) {
+          L.down = key;
+          mat.current!.setDown(down);
+        }
+        if (L.joined) {
+          if (L.target.x === L.pos.x && L.target.y === L.pos.y) {
+            sit();
+            return;
+          }
+          L.pos = L.target;
+          send(heroToken(L.hero, toWorld(L.pos, L.doc)));
+          return;
+        }
+      }
       const dx = L.target.x - L.pos.x;
       const dy = L.target.y - L.pos.y;
       const dist = Math.hypot(dx, dy);
-      if (dist < 0.5) return;
+      if (dist < 0.5) {
+        L.joined = true;
+        L.rejoin = false;
+        return;
+      }
       // Never past the target: a step that overshot would send a move every
       // frame for ever, and each one wakes the engine before it can draw.
       const speed = Math.min(dist, Math.max(3, dist * 0.12));
@@ -581,21 +808,49 @@ export default function PageTable() {
     };
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
-  }, [send]);
+  }, [send, sit, stand]);
 
-  const pick = (h: Walker) => {
+  /** `h` walks the page from here on. */
+  const walkAs = (h: Walker) => {
+    const L = live.current;
+    // Still on their seat in the tavern, the two trade seats at once: no
+    // walk across the room, no two on one square. The engine glides a moved
+    // token, so the walker is lifted and set down instead.
+    const seatOf = (w: Walker) => (w.data ? undefined : currentMat()?.pieces.find((p) => p.id === w.slug));
+    const was = seatOf(L.hero);
+    const next = seatOf(h);
+    const seated = was && Math.hypot(L.pos.x - centreOf(was).x, L.pos.y - centreOf(was).y) < L.cell / 2;
     setHero(h);
-    setJourneyHero(h);
-    live.current.hero = h;
+    L.hero = h;
     if (!h.data) setSpec(presetSpec(h.slug));
-    if (live.current.phase === "running") {
-      send(heroToken(h, toWorld(live.current.pos, live.current.doc), true));
+    if (L.phase === "running") {
+      const swap = seated && next;
+      if (swap) {
+        L.pos = L.target = centreOf(next);
+        // The old route starts on the old seat: a new one, from this one.
+        L.route = null;
+        send({ type: "remove_token", tokenId: WALKER });
+      }
+      send(heroToken(h, toWorld(L.pos, L.doc), true));
+      if (swap) send({ type: "set_controlled_token", tokenId: WALKER });
       drawMat();
     }
   };
+  const pick = (h: Walker) => {
+    walkAs(h);
+    setJourneyHero(h);
+  };
+  // One of the party tapped in the tavern.
+  const walking = useRef(walkAs);
+  walking.current = walkAs;
+  useEffect(() => watchJourneyHero((h) => h !== live.current.hero && walking.current(h)), []);
 
   // A token dragged or a door swung on the first screen.
   useEffect(() => watchMat(() => live.current.phase === "running" && drawMat()), [drawMat]);
+  // Another map picked in the atlas: the hero goes to stand under it.
+  useEffect(() => watchPick(() => live.current.phase === "running" && drawMat()), [drawMat]);
+  // The camp laid or moved, or its party known (spec 098 US6).
+  useEffect(() => watchCamp(() => live.current.phase === "running" && drawMat()), [drawMat]);
 
   /** The built hero, drawn to pixels and sent to walk. */
   const apply = async () => {
@@ -636,6 +891,7 @@ export default function PageTable() {
         aria-hidden="true"
       />
       <aside
+        ref={note}
         className={`journey${open ? " journey--open" : ""}${open && mode === "build" ? " journey--build" : ""}`}
         aria-label="Your hero's walk"
         style={{ ["--journey" as string]: pct / 100 }}

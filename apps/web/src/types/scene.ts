@@ -38,6 +38,8 @@ export type SceneRecord = {
   previewUrl: string | null;
   /** Playtest 2026-09-10 P9: the scene's baseline light — `bright`, `dim` or `dark`. */
   ambientLight?: string;
+  /** Spec 099 US5: the scene's hour, 0 to 24, or `null` for no clock. */
+  timeOfDay?: number | null;
   /**
    * Spec 088 FR-030: whose map the background is, when it came from one of
    * the bundled base maps. `null` for a blank scene or an upload, which the

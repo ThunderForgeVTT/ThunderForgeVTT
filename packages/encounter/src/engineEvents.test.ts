@@ -133,6 +133,20 @@ test("an sdk error, with and without the command", () => {
   );
 });
 
+test("the scene's clock, running and stopped (spec 099)", () => {
+  assert.deepEqual(
+    parseEngineEvent(json({ type: "time_of_day", hour: 21.5, darkness: 0.72 })),
+    { type: "time_of_day", hour: 21.5, darkness: 0.72 },
+  );
+  assert.deepEqual(parseEngineEvent(json({ type: "time_of_day", darkness: 0 })), {
+    type: "time_of_day",
+    hour: null,
+    darkness: 0,
+  });
+  assert.equal(parseEngineEvent(json({ type: "time_of_day", hour: "noon", darkness: 0 })), null);
+  assert.equal(parseEngineEvent(json({ type: "time_of_day", hour: 12 })), null);
+});
+
 test("any other event is null", () => {
   assert.equal(
     parseEngineEvent(json({ type: "grid_snap_changed", enabled: true })),

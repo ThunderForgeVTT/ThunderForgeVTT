@@ -296,6 +296,10 @@ pub const EVENT_CODE_STAGED_CONTENT_DECIDED: i32 = 41;
 /// Spec 048: an actor was rolled back to before an import. Same payload as
 /// [`EVENT_CODE_SHEET_IMPORT_APPLIED`], `importId` naming the rollback record.
 pub const EVENT_CODE_ACTOR_ROLLED_BACK: i32 = 42;
+/// Spec 099 US5: a Game Master set a scene's time of day. Every client
+/// showing the scene sets its engine's clock. Payload: `{"sceneId": <id>,
+/// "hour": <0..24 or null>, "overSecs": <seconds or null>}`.
+pub const EVENT_CODE_SCENE_TIME_CHANGED: i32 = 43;
 
 /// The whole payload of a roll event (FR-002).
 pub fn roll_event_payload(

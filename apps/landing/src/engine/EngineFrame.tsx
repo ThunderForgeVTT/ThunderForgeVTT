@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { DEMO } from "../links.ts";
 import "./engine-frame.css";
 import { FRAME_FAILED, type FrameFailed, type HeldBack } from "./frameEvents.ts";
-import { sendAs, stopped, take, type Send } from "./host.ts";
+import { sendAs, stopped, take, whenReady, type Send } from "./host.ts";
 import { EngineLoadError, type Progress, type Stage } from "./loadEngine.ts";
 
 // Spec 090 FR-011 to FR-019: the real engine in a frame on the page, only when
@@ -91,6 +91,9 @@ function report(detail: FrameFailed) {
   window.dispatchEvent(new CustomEvent<FrameFailed>(FRAME_FAILED, { detail }));
 }
 
+/** How long a frame stays in view before it takes the table. */
+const SETTLE = 300;
+
 const mb = (n: number) => (n / 1e6).toFixed(1);
 
 export default function EngineFrame(props: Props) {
@@ -129,13 +132,26 @@ export default function EngineFrame(props: Props) {
   );
 
   useEffect(() => {
+    let mounted = true;
     const held = holdBack(maxTextureSize);
     if (held) {
       setWhy(held.words);
       go("unsupported");
       report({ stage: "probe", reason: held.reason });
+      // Saving data holds back the download, not the table: once the page's
+      // mat has loaded the engine, the frame may use it.
+      if (held.reason === "save_data") {
+        whenReady(() => {
+          if (!mounted) return;
+          setWhy(null);
+          go("poster");
+        });
+      }
     }
-    return () => abort.current?.abort();
+    return () => {
+      mounted = false;
+      abort.current?.abort();
+    };
   }, [go, maxTextureSize]);
 
   async function boot() {
@@ -181,17 +197,24 @@ export default function EngineFrame(props: Props) {
 
   // `auto`: in view, the frame takes the table back from the page. The page
   // takes it again only once this frame is a screen away, so they never
-  // trade it back and forth at an edge.
+  // trade it back and forth at an edge. A flick past it takes nothing: the
+  // frame must stay in view for SETTLE first, since a take swaps the scene
+  // and costs a phone a frame or two of jank.
   useEffect(() => {
     if (!auto || (state !== "poster" && state !== "away") || !root.current) return;
+    let wait: ReturnType<typeof setTimeout> | undefined;
     const io = new IntersectionObserver(
       ([entry]) => {
-        if (entry?.isIntersecting) void boot();
+        clearTimeout(wait);
+        if (entry?.isIntersecting) wait = setTimeout(() => void boot(), SETTLE);
       },
       { threshold: 0.5 },
     );
     io.observe(root.current);
-    return () => io.disconnect();
+    return () => {
+      clearTimeout(wait);
+      io.disconnect();
+    };
     // `boot` is a fresh closure every render; the state decides.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auto, state]);

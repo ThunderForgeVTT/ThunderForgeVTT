@@ -150,8 +150,9 @@ test.describe("the room in words", () => {
     await formula.press("ArrowDown");
     expect(await square(page)).toBe("2,2.5");
 
-    // On the hero mat: the hero section's own controls, not the room's.
-    const mat = page.locator("[data-section=hero] button").first();
+    // In the hero section: its own controls, not the room's. A wide page's
+    // tavern is on the engine, so its first control is a link.
+    const mat = page.locator("[data-section=hero] button, [data-section=hero] a").first();
     await mat.focus();
     await page.keyboard.press("ArrowDown");
     await page.keyboard.press("s");

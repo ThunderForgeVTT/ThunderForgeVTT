@@ -17,7 +17,7 @@ import {
 } from "@thunderforge/encounter";
 import type { FrameState, Send } from "../engine/EngineFrame.tsx";
 import { listen } from "../engine/dispatch.ts";
-import { canvasOf, running, viewAs } from "../engine/host.ts";
+import { canvasOf, running } from "../engine/host.ts";
 import { throwId } from "../dice.ts";
 import { pressOnCanvas } from "../engine/keys.ts";
 import { journeyHero, watchJourneyHero, type Walker } from "../table/journeyHero.ts";
@@ -203,9 +203,9 @@ export function useRoom(script: RoomScript, frameId: string) {
     (send: Send) => {
       const reduced = matchMedia(REDUCE).matches;
       for (const c of sceneCommands(script, heroNow.current, now.current, reduced)) send(c);
-      viewAs(frameId, HERO_ID);
+      // The landing shows the whole map: walls stop feet, not sight.
     },
-    [script, frameId],
+    [script],
   );
 
   const teardown = useCallback(

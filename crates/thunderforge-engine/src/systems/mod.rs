@@ -50,6 +50,7 @@ pub mod shape;
 pub mod shape_authority;
 pub mod sync;
 pub mod token;
+pub mod token_glide;
 pub mod token_grid;
 pub mod token_loader;
 pub mod token_move;

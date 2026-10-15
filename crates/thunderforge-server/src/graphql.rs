@@ -57,6 +57,7 @@ pub use helpers::{
 pub mod actor_conditions;
 pub mod exploration;
 pub mod queries;
+pub mod scene_time;
 pub mod world_system_settings;
 pub use queries::{
     AbilityQuery, AbilityVocabularyQuery, ActorQuery, AdminQuery, HealthcheckQuery, InventoryQuery,
@@ -499,6 +500,8 @@ pub struct QueryRoot(
 pub struct MutationRoot(
     // Spec 045 US7: turning a scene's memory on, and resetting it.
     exploration::ExplorationMutation,
+    // Spec 099 US5: the Game Master sets the table's time.
+    scene_time::SceneTimeMutation,
     world_system_settings::WorldSystemSettingsMutation,
     actor_conditions::ActorConditionsMutation,
     queries::token_status::TokenDisclosureMutation,

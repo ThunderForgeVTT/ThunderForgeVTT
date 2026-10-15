@@ -408,6 +408,94 @@ img {
   min-height: calc(var(--cell) * 8);
 }
 
+/* The tavern under the headline, the party inside it; beside it once the
+   page is wide enough for both (eleven cells of map). */
+.hero--tavern .hero-body {
+  grid-template-columns: minmax(0, 1fr);
+  gap: calc(var(--cell) * 1.25);
+  align-items: start;
+}
+@media (min-width: 1200px) {
+  .hero--tavern .hero-body {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  }
+}
+/* Under the headline, the goblins stand on the grass below the map. */
+@media (max-width: 1199px) {
+  .hero--tavern .hero-tavern {
+    padding-bottom: calc(var(--cell) * 6.5);
+  }
+}
+/* A phone: the map fits between 16px gutters, centred, at up to a cell a
+   square. */
+@media (max-width: 559px) {
+  .hero--tavern .hero-tavern {
+    margin-inline: calc(16px - var(--cell));
+  }
+  .hero-tavern-map {
+    width: min(calc(var(--cell) * 11), 100%);
+    height: auto;
+    aspect-ratio: 11 / 8;
+    margin-inline: auto;
+  }
+  .hero-tavern-credit {
+    padding-inline: calc(var(--cell) - 16px);
+  }
+}
+.hero--tavern .room h1 {
+  font-size: clamp(3rem, 1.5rem + 3.4vw, 5.5rem);
+}
+.hero-tavern {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+}
+/* One map square to one page cell, so its lines are the page's lines. */
+.hero-tavern-map {
+  position: relative;
+  width: calc(var(--cell) * 11);
+  height: calc(var(--cell) * 8);
+}
+.hero-tavern-art {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.hero-tavern-token {
+  position: absolute;
+  pointer-events: none;
+}
+/* The party are buttons: a tap picks who walks the page. */
+.hero-tavern-pick {
+  padding: 0;
+  border: 0;
+  background: none;
+  pointer-events: auto;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.hero-tavern-pick img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.hero-tavern-pick:focus-visible {
+  outline: var(--marker-w) solid var(--ink-blue);
+  outline-offset: 2px;
+  border-radius: 50%;
+}
+.hero-tavern-credit {
+  margin: 0.5rem 0 0;
+  max-width: calc(var(--cell) * 11);
+  color: var(--text-soft);
+  font-size: 0.9rem;
+}
+/* The tavern runs past the first screen; no note is needed to say so. */
+.hero--tavern .scroll-cue {
+  display: none;
+}
+
 /* The note at the foot of the first screen: a word in marker and a drawn
    arrow on a slip of paper, pinned to the viewport's lower right on wide
    screens, where the hero fills the first screen and often runs a little
@@ -1598,6 +1686,42 @@ main {
 
 .support {
   padding-top: calc(var(--cell) * 2);
+}
+.support-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--cell);
+  align-items: start;
+}
+/* A narrower page has the camp under the thanks, in the middle. */
+.support > .camp {
+  width: fit-content;
+  margin: var(--cell) auto 0;
+}
+/* The camp, beside the heading: one map square to one page cell. */
+.camp {
+  position: relative;
+  z-index: 1;
+}
+.camp-map {
+  position: relative;
+  width: calc(var(--cell) * 8);
+  height: calc(var(--cell) * 8);
+}
+.camp-art {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.camp-token {
+  position: absolute;
+  pointer-events: none;
+}
+.camp-credit {
+  margin: 0.5rem 0 0;
+  max-width: calc(var(--cell) * 8);
+  color: var(--text-soft);
+  font-size: 0.9rem;
 }
 .support-ways {
   display: grid;

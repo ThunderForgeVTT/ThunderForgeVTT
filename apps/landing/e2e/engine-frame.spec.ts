@@ -79,6 +79,22 @@ test.describe("the engine", () => {
     test.setTimeout(BOOT_TIMEOUT + 120_000);
   });
 
+  test("asked to save data, a frame takes the engine once the page's mat has loaded it", async ({ page }) => {
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, "connection", { get: () => ({ saveData: true }) });
+    });
+    // Under 1200px the dungeon keeps its own frame, as on a phone.
+    await page.setViewportSize({ width: 1100, height: 900 });
+    await openLanding(page); // emulates reduce
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await page.reload();
+    await expect(page.locator("body.in-engine")).toBeAttached({ timeout: BOOT_TIMEOUT });
+    const room = page.locator("#room-table");
+    await room.scrollIntoViewIfNeeded();
+    await expect(room).not.toHaveClass(/engine-frame--unsupported/);
+    await expect(room).toHaveClass(/engine-frame--running/, { timeout: BOOT_TIMEOUT });
+  });
+
   test("the click loads the demo's engine, with its progress in words", async ({ page }) => {
     const opened = await openLanding(page);
     await frame(page).scrollIntoViewIfNeeded();

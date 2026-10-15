@@ -149,6 +149,17 @@ pub(crate) struct SceneParams<'w, 's> {
     viewer_user: Option<ResMut<'w, resources::ViewerUserId>>,
     // Spec 090: exists once `RenderPausePlugin` is registered.
     rendering: Option<ResMut<'w, plugins::render_pause::Rendering>>,
+    // Spec 099: grouped, as Bevy caps a parameter set at 16.
+    table_time: TableTime<'w>,
+}
+
+/// Spec 099's resources: the glide's motion preference and the clock.
+#[derive(bevy::ecs::system::SystemParam)]
+pub(crate) struct TableTime<'w> {
+    // Exists once `TokenPlugin` is registered.
+    reduced_motion: Option<ResMut<'w, crate::systems::token_glide::ReducedMotion>>,
+    // Exists once `DarknessPlugin` is registered.
+    time_of_day: Option<ResMut<'w, plugins::time_of_day::TimeOfDay>>,
 }
 
 /// The interaction plugin's resources, grouped.
@@ -311,6 +322,11 @@ pub(crate) fn apply_external_commands(
                                 &token.owner_user_id,
                             ));
                     }
+                    if let Some(defeated) = token.defeated {
+                        commands
+                            .entity(existing_entity)
+                            .insert(crate::plugins::token_defeated::TokenDefeated(defeated));
+                    }
                     if let Some(conditions) = &token.conditions {
                         commands.entity(existing_entity).insert(
                             crate::plugins::condition_markers::TokenConditions::from_payload(
@@ -411,6 +427,11 @@ pub(crate) fn apply_external_commands(
                         None,
                         &token.owner_user_id,
                     ));
+                if let Some(defeated) = token.defeated {
+                    commands
+                        .entity(entity)
+                        .insert(crate::plugins::token_defeated::TokenDefeated(defeated));
+                }
                 if let Some(conditions) = &token.conditions {
                     commands.entity(entity).insert(
                         crate::plugins::condition_markers::TokenConditions::from_payload(
@@ -561,6 +582,12 @@ pub(crate) fn apply_external_commands(
                 }
             }
             ExternalCommand::UpsertLight { light } => {
+                if let Some(tod) = scene.table_time.time_of_day.as_mut() {
+                    match light.by_night {
+                        true => tod.night_lights.insert(light.id.clone()),
+                        false => tod.night_lights.remove(&light.id),
+                    };
+                }
                 if let Some(light_set) = light_set.as_deref_mut() {
                     light_set.upsert(EngineLight {
                         id: light.id,
@@ -579,6 +606,9 @@ pub(crate) fn apply_external_commands(
                 }
             }
             ExternalCommand::RemoveLight { light_id } => {
+                if let Some(tod) = scene.table_time.time_of_day.as_mut() {
+                    tod.night_lights.remove(&light_id);
+                }
                 if let Some(light_set) = light_set.as_deref_mut() {
                     light_set.remove(&light_id);
                 }
@@ -605,6 +635,7 @@ pub(crate) fn apply_external_commands(
                 path,
                 width,
                 height,
+                night_path,
             } => {
                 if let Some(background) = background.as_deref_mut() {
                     // Bug fix: writing through `ResMut::deref_mut` trips
@@ -626,11 +657,13 @@ pub(crate) fn apply_external_commands(
                     // nothing actually changed.
                     let unchanged = background.path == path
                         && background.width == width
-                        && background.height == height;
+                        && background.height == height
+                        && background.night_path == night_path;
                     if !unchanged {
                         background.path = path;
                         background.width = width;
                         background.height = height;
+                        background.night_path = night_path;
                     }
                 }
             }
@@ -926,6 +959,14 @@ pub(crate) fn apply_external_commands(
             ExternalCommand::SetReducedMotion { reduced } => {
                 if let Some(inbox) = dice_inbox.as_deref_mut() {
                     inbox.reduced = Some(reduced);
+                }
+                if let Some(motion) = scene.table_time.reduced_motion.as_mut() {
+                    motion.0 = reduced;
+                }
+            }
+            ExternalCommand::SetTimeOfDay { hour, over_secs } => {
+                if let Some(tod) = scene.table_time.time_of_day.as_mut() {
+                    tod.set(hour, over_secs);
                 }
             }
             ExternalCommand::SetRendering { on } => {

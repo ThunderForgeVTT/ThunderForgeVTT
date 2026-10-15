@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useRef,
   useState,
   type Dispatch,
   type RefObject,
@@ -27,8 +28,13 @@ import {
   setSceneAmbient,
   type AmbientLevel,
 } from "@/engine/world/sync/sceneLighting";
+import {
+  applySceneTimeWorldEvent,
+  asHour,
+  setSceneTime,
+} from "@/engine/world/sync/sceneTime";
 import type { WorldStore } from "@/engine/world/store";
-import { updateSceneAmbientLight } from "@/api/scenes";
+import { setSceneTimeOfDay, updateSceneAmbientLight } from "@/api/scenes";
 import type { SceneLevel } from "@/api/levels";
 import type { SceneRecord } from "@/types/scene";
 import type { AuthUser } from "@/types/auth";
@@ -97,6 +103,20 @@ export function useSceneLiveSync({
       ? heardAmbient.level
       : undefined) ??
     asAmbientLevel(sceneLevel?.ambientLight ?? selectedScene?.ambientLight);
+
+  // Spec 099 US5: the scene's hour, as last heard, else as loaded. A heard
+  // change goes to the engine with its transition as it arrives and is noted
+  // in `sentTime`, so the effect below, which sets the hour at once when a
+  // scene mounts, does not send it again as a jump.
+  const [timeBySceneId, setTimeBySceneId] = useState<
+    Record<string, number | null>
+  >({});
+  const heardTime = sceneId ? timeBySceneId[sceneId] : undefined;
+  const sceneTime: number | null =
+    heardTime !== undefined ? heardTime : asHour(selectedScene?.timeOfDay);
+  const sentTime = useRef<{ sceneId: string; hour: number | null } | null>(
+    null,
+  );
 
   // Live cross-client sync: one subscription per mounted scene, feeding
   // every apply*WorldEvent for this scene's canvas primitives — each of
@@ -195,6 +215,14 @@ export function useSceneLiveSync({
             shownLevel === null || shownLevel.isEntry
               ? applySceneLightingWorldEvent(worldStore, sceneId, event)
               : null;
+          const time = applySceneTimeWorldEvent(worldStore, sceneId, event);
+          if (time) {
+            sentTime.current = { sceneId, hour: time.hour };
+            setTimeBySceneId((current) => ({
+              ...current,
+              [sceneId]: time.hour,
+            }));
+          }
           if (ambient) {
             const against = sceneLevelListRef.current;
             setAmbientBySceneId((current) => ({
@@ -244,6 +272,35 @@ export function useSceneLiveSync({
     setSceneAmbient(worldStore, sceneAmbient);
   }, [sceneId, bridgeReady, sceneAmbient, worldStore]);
 
+  // Spec 099 US5: a scene mounts at its hour, at once. A scene with no hour
+  // still sends `null`, so the last scene's clock does not follow it here.
+  useEffect(() => {
+    if (!sceneId || !bridgeReady) {
+      sentTime.current = null;
+      return;
+    }
+    const sent = sentTime.current;
+    if (sent?.sceneId === sceneId && sent.hour === sceneTime) {
+      return;
+    }
+    sentTime.current = { sceneId, hour: sceneTime };
+    setSceneTime(worldStore, sceneTime);
+  }, [sceneId, bridgeReady, sceneTime, worldStore]);
+
+  // Applied when the server's event comes back, like everyone else's, so
+  // the Game Master sees the same transition the table does.
+  const changeSceneTime = useCallback(
+    (hour: number | null, overSecs?: number) => {
+      if (!sceneId) {
+        return;
+      }
+      setSceneTimeOfDay(sceneId, hour, overSecs).catch((error: unknown) => {
+        console.error("Failed to change the scene's time:", error);
+      });
+    },
+    [sceneId],
+  );
+
   const changeSceneAmbient = useCallback(
     (level: AmbientLevel) => {
       if (!sceneId) {
@@ -274,5 +331,5 @@ export function useSceneLiveSync({
     [sceneId, sceneAmbient, sceneLevel, sceneLevelList, levelActions],
   );
 
-  return { sceneAmbient, changeSceneAmbient };
+  return { sceneAmbient, changeSceneAmbient, sceneTime, changeSceneTime };
 }

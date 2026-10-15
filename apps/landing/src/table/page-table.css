@@ -32,7 +32,9 @@ body.in-engine .scroll-cue {
 /* The first screen's walls, door and tokens are the engine's now
    (`heroMat.ts`): the page keeps only the handles, to drag and to read. */
 body.in-engine .mat-ink .walls,
-body.in-engine .hero .token img {
+body.in-engine .hero .token img,
+body.in-engine .hero-tavern-map img,
+body.in-engine .camp-map img {
   visibility: hidden;
 }
 
@@ -55,6 +57,11 @@ body.in-engine .hero .token img {
   box-shadow: 3px 4px 0 rgb(31 42 46 / 0.18);
   font-size: 0.95rem;
   line-height: 1.3;
+  transition: opacity 0.2s;
+}
+/* The hero stands behind the note: it steps back, until a hand comes near. */
+.journey[data-behind]:not(.journey--open):not(:hover):not(:focus-within) {
+  opacity: 0.3;
 }
 .journey-face {
   padding: 0;
@@ -321,8 +328,11 @@ body.in-engine .hero .token img {
 }
 :root.dusk {
   color-scheme: dark;
-  --mat: #1b2124;
-  --mat-deep: #151a1c;
+  /* The engine's night over the page (`NIGHT` in journey.ts), measured off
+     the screen: when a room takes the table the page behind it shows this,
+     and the night must not change colour as it does. */
+  --mat: #343a54;
+  --mat-deep: #2b3046;
   --paper: #222a2e;
   --ink-black: #e9e5da;
   --ink-blue: #7fa6f2;
@@ -338,11 +348,22 @@ body.in-engine .hero .token img {
   /* Firelight on the headings. */
   text-shadow: 0 0 18px rgb(255 179 92 / 0.28);
 }
+:root.dusk .marker {
+  /* Ink multiplies into paper; chalk on the night board must not. Multiplied,
+     the legend's swatches and the GM's screen came out the colour of the night. */
+  mix-blend-mode: normal;
+}
 :root.dusk .sc-point {
   /* By night the star chart is in the sky: starlight, not ink. */
   stroke: #f4e3a6;
   fill: rgb(244 227 166 / 0.12);
   filter: drop-shadow(0 0 5px rgb(255 228 150 / 0.55));
+}
+:root.dusk .sc-point,
+:root.dusk .sc-links .marker {
+  /* Ink multiplies into paper; light adds to the sky. Multiplied onto the
+     night, the stars came out the colour of the night. */
+  mix-blend-mode: screen;
 }
 :root.dusk .sc-links .marker {
   stroke: #cdd8f5;

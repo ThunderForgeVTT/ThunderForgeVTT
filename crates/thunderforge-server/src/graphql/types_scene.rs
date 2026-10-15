@@ -71,6 +71,9 @@ pub struct GraphQLScene {
     /// Playtest 2026-09-10 P9: `bright`, `dim` or `dark` — the light every
     /// client showing this scene hands its engine.
     pub ambient_light: String,
+    /// Spec 099 US5: the hour the scene's clock shows, 0 to 24, or `null`
+    /// for no clock.
+    pub time_of_day: Option<f32>,
 }
 
 #[async_graphql::ComplexObject]
@@ -164,6 +167,7 @@ impl From<crate::models::Scene> for GraphQLScene {
                 .map(|id| format!("/api/scene-assets/{id}/thumb")),
             background_grid_mismatch,
             ambient_light: scene.ambient_light,
+            time_of_day: scene.time_of_day,
         }
     }
 }

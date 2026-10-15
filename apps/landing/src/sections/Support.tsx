@@ -1,19 +1,29 @@
 import { DISCUSSIONS, KOFI, PROJECTS, REPO, SPONSORS } from "../links.ts";
 import { CupMark, GitHubMark, HeartMark, StarMark } from "../Icons.tsx";
 import { useStars } from "../useStars.ts";
+import { useWide } from "../useWide.ts";
+import { Campfire } from "./Campfire.tsx";
 
 export function Support() {
   const stars = useStars();
+  const wide = useWide();
   return (
     <section id="support" data-section="support" className="section support" aria-labelledby="support-title">
-      <h2 id="support-title" className="marker-head marker-head--big">
-        Pull up a chair.
-      </h2>
-      <p className="lede">
-        This isn't a cry for money. ThunderForge is one person's passion, worked on every day,
-        and it will take time. If you want to see it reach your table, here is how to help it get
-        there faster.
-      </p>
+      <div className="support-head">
+        <div>
+          <h2 id="support-title" className="marker-head marker-head--big">
+            Pull up a chair.
+          </h2>
+          <p className="lede">
+            This isn't a cry for money. ThunderForge is one person's passion, worked on every day,
+            and it will take time. If you want to see it reach your table, here is how to help it get
+            there faster.
+          </p>
+        </div>
+        {/* Where the walk ends: the party round a fire (spec 098 US6), beside
+            the heading on a wide page and under the thanks on a narrower one. */}
+        {wide && <Campfire />}
+      </div>
       <div className="support-ways">
         <div className="way">
           <h3>Fund the work</h3>
@@ -55,6 +65,7 @@ export function Support() {
         </div>
       </div>
       <p className="thanks">Thank you for your patience. See you at the table.</p>
+      {!wide && <Campfire />}
     </section>
   );
 }

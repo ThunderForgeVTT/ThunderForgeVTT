@@ -15,6 +15,11 @@ use crate::resources::{BackgroundTextureCache, CanvasLayer, PlacedCanvasImages, 
 #[derive(Component)]
 pub(crate) struct BackgroundSprite;
 
+/// Marker on the night map's sprite, over the day map's (spec 099 US3).
+/// It carries `BackgroundSprite` too, so it comes and goes with the map.
+#[derive(Component)]
+pub(crate) struct NightBackgroundSprite;
+
 /// T(new): despawns the previous background sprite (if any) and, when
 /// `SceneBackground.path` is `Some`, spawns a fresh one sized to
 /// `width`x`height` at the scene origin, loading the image via
@@ -78,6 +83,27 @@ pub(crate) fn sync_scene_background(
         Transform::from_xyz(0.0, 0.0, CanvasLayer::Background.z()),
         BackgroundSprite,
     ));
+
+    // Spec 099 FR-007: the night map, unseen until the darkness rises.
+    if let Some(night) = background.night_path.clone() {
+        let image = load_canvas_image(
+            &night,
+            asset_cache.as_deref_mut(),
+            &mut images,
+            &asset_server,
+        );
+        commands.spawn((
+            Sprite {
+                image,
+                custom_size: Some(Vec2::new(background.width, background.height)),
+                color: Color::WHITE.with_alpha(0.0),
+                ..default()
+            },
+            Transform::from_xyz(0.0, 0.0, CanvasLayer::Background.z() + 0.001),
+            BackgroundSprite,
+            NightBackgroundSprite,
+        ));
+    }
 
     // Start of the interval anyone measuring a map switch cares about. The
     // matching `background_loaded` mark is left by

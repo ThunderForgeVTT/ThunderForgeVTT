@@ -89,9 +89,11 @@ export async function settleLanding(page: Page): Promise<void> {
   await expect(page.getByText("Pick a roll.")).toBeVisible();
   await page.evaluate(async () => {
     await document.fonts.ready;
-    await Promise.all(
-      [...document.images].map((img) => img.decode().catch(() => undefined)),
-    );
+    // Headless Chromium can leave a decode pending for good, even on a
+    // loaded image, and one such promise ate the whole test's time.
+    const bounded = (img: HTMLImageElement) =>
+      Promise.race([img.decode().catch(() => undefined), new Promise((r) => setTimeout(r, 5000))]);
+    await Promise.all([...document.images].map(bounded));
   });
 }
 

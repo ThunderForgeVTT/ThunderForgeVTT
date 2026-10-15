@@ -30,6 +30,10 @@ export interface LightingToolProps {
   ambientLight?: AmbientLevel;
   /** Set the scene's light; the control is hidden without it. */
   onAmbientLightChange?: (level: AmbientLevel) => void;
+  /** Spec 099 US5: the scene's hour, or `null` for no clock. */
+  timeOfDay?: number | null;
+  /** Set the scene's hour, over `overSecs` when given; hidden without it. */
+  onTimeOfDayChange?: (hour: number | null, overSecs?: number) => void;
   /**
    * Spec 045 US7: whether this scene remembers where players have been.
    *
@@ -59,6 +63,21 @@ const AMBIENT_LABELS: Record<AmbientLevel, string> = {
   dark: "Dark",
 };
 
+/** 22.5 → "22:30", for the time input. */
+function hourToClock(hour: number): string {
+  const minutes = Math.round(hour * 60) % (24 * 60);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`;
+}
+
+/** "22:30" → 22.5; anything unreadable is `null`. */
+function clockToHour(clock: string): number | null {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(clock);
+  if (!match) return null;
+  const hour = Number(match[1]) + Number(match[2]) / 60;
+  return hour < 24 ? hour : null;
+}
+
 /**
  * LightingTool: canvas toolbar button that toggles "place light" mode,
  * plus a property panel for the currently selected light source (radius,
@@ -83,6 +102,8 @@ export function LightingTool({
   tokens,
   ambientLight = "bright",
   onAmbientLightChange,
+  timeOfDay = null,
+  onTimeOfDayChange,
   explorationEnabled = false,
   onExplorationChange,
   onExplorationReset,
@@ -90,6 +111,11 @@ export function LightingTool({
   units = DEFAULT_SCENE_UNITS,
 }: LightingToolProps) {
   const [placeMode, setPlaceMode] = useState(false);
+  const [clockDraft, setClockDraft] = useState<string | null>(null);
+  const [passSecs, setPassSecs] = useState("0");
+  const clockValue =
+    clockDraft ?? (timeOfDay === null ? "" : hourToClock(timeOfDay));
+  const draftHour = clockToHour(clockValue);
 
   const selectedLight = selectedLightId ? lights[selectedLightId] : null;
 
@@ -173,6 +199,80 @@ export function LightingTool({
           </div>
           <p className="text-xs text-muted-foreground">
             Walls cast shadows in dim and dark scenes.
+          </p>
+        </div>
+      ) : null}
+
+      {onTimeOfDayChange ? (
+        <div className="grid gap-1.5" data-testid="scene-time">
+          <p
+            id="scene-time-label"
+            className="text-xs font-semibold tracking-widest text-muted-foreground uppercase"
+          >
+            Time of day
+          </p>
+          <div className="flex items-end gap-1">
+            <div className="grid gap-1">
+              <Label htmlFor="scene-time-hour" className="text-xs">
+                Hour
+              </Label>
+              <Input
+                id="scene-time-hour"
+                type="time"
+                value={clockValue}
+                onChange={(event) => setClockDraft(event.target.value)}
+                data-testid="scene-time-hour"
+              />
+            </div>
+            <div className="grid gap-1">
+              <Label htmlFor="scene-time-over" className="text-xs">
+                Over (secs)
+              </Label>
+              <Input
+                id="scene-time-over"
+                type="number"
+                min={0}
+                max={600}
+                value={passSecs}
+                onChange={(event) => setPassSecs(event.target.value)}
+                className="w-20"
+                data-testid="scene-time-over"
+              />
+            </div>
+          </div>
+          <div className="flex gap-1">
+            <Button
+              type="button"
+              size="sm"
+              disabled={draftHour === null}
+              onClick={() => {
+                if (draftHour === null) return;
+                const over = Math.min(600, Math.max(0, Number(passSecs) || 0));
+                onTimeOfDayChange(draftHour, over > 0 ? over : undefined);
+                setClockDraft(null);
+              }}
+              data-testid="scene-time-set"
+            >
+              Set time
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              disabled={timeOfDay === null}
+              onClick={() => {
+                onTimeOfDayChange(null);
+                setClockDraft(null);
+              }}
+              data-testid="scene-time-clear"
+            >
+              No clock
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {timeOfDay === null
+              ? "No clock: the scene light above rules."
+              : `The table's clock reads ${hourToClock(timeOfDay)}.`}
           </p>
         </div>
       ) : null}

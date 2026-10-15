@@ -28,7 +28,7 @@ const ATLAS = [
 ];
 
 // The rooms' maps: copied with their geometry, but not in the atlas.
-const ROOMS = ["tavern-sample", "dungeon-sample"];
+const ROOMS = ["tavern-sample", "dungeon-sample", "camp-sample"];
 
 await mkdir(out, { recursive: true });
 const catalog = path.join(source, "maps.json");

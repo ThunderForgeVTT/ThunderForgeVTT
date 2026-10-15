@@ -6,6 +6,7 @@ import { expectClean, openLanding } from "./support/page.ts";
 import {
   bootRoom,
   engineHero,
+  heroToken,
   FIXED_SEEDS,
   goal,
   pressAndHear,
@@ -63,13 +64,13 @@ test.describe("the room on the engine", () => {
     const started = Date.now();
     await recordSaid(page);
 
-    // Scenario 2: the hero is the controlled token, at the start, seeing
-    // from there; the hall behind the shut door is dark to them.
+    // Scenario 2: the hero is the controlled token, at the start. The landing
+    // shows the whole map, so the hall behind the shut door is drawn too.
     await expect
       .poll(() => engine<{ named?: string; found?: boolean }>(page, "movement_state"))
       .toMatchObject({ named: HERO_ID, found: true });
     await standsAt(page, "2,3.5");
-    await expect.poll(() => seen(page, HALL_POINT)).toBe(false);
+    await expect.poll(() => seen(page, HALL_POINT)).toBe(true);
     for (const id of ["door-reached", "door-opened", "chest-found", "chest-opened"]) {
       await expect(goal(page, id)).toContainText("(not yet)");
     }
@@ -85,7 +86,7 @@ test.describe("the room on the engine", () => {
     await standsAt(page, "2,0.5");
     await expect(goal(page, "door-reached")).toContainText("(done)");
 
-    // Scenario 4: the door opens on the table, and the hall comes into sight.
+    // Scenario 4: the door opens on the table.
     await pressAndHear(
       page,
       room(page).getByRole("button", { name: "Open the door to the hall" }),
@@ -141,12 +142,18 @@ test.describe("the room on the engine", () => {
     // The landing's tests hold still; this one is about a page that moves.
     await page.emulateMedia({ reducedMotion: "no-preference" });
     await page.reload();
-    await roomFrame(page).evaluate((el) => el.scrollIntoView({ block: "center" }));
+    // A wide page swaps the frame for its board on the page's grid (spec 098
+    // FR-008): scroll again until whichever stands is on screen.
+    await expect(async () => {
+      await roomFrame(page).evaluate((el) => el.scrollIntoView({ block: "center", behavior: "instant" }));
+      await expect(roomFrame(page)).toBeInViewport({ timeout: 500 });
+    }).toPass();
     await expect(roomFrame(page)).toHaveClass(/engine-frame--running/, { timeout: BOOT_TIMEOUT });
     await expect(roomFrame(page).getByRole("button")).toHaveCount(0);
+    const named = await heroToken(page);
     await expect
       .poll(() => engine<{ named?: string; found?: boolean }>(page, "movement_state"))
-      .toMatchObject({ named: HERO_ID, found: true });
+      .toMatchObject({ named, found: true });
     expectClean(opened);
   });
 
@@ -156,7 +163,7 @@ test.describe("the room on the engine", () => {
     await recordSaid(page);
     await standsAt(page, "2,3.5");
 
-    // Scenario 5: no door in reach: the button says why, the hall stays dark.
+    // Scenario 5: no door in reach: the button says why.
     const door = room(page).getByRole("button", { name: "Open the door" });
     await expect(door).toBeDisabled();
     await expect(door).toHaveAccessibleDescription(/No door is within reach/);
@@ -173,7 +180,7 @@ test.describe("the room on the engine", () => {
     await page.evaluate(() => ((window as unknown as { kept: number }).kept = 1));
     await room(page).getByRole("button", { name: "Start over" }).click();
     await standsAt(page, "2,3.5");
-    await expect.poll(() => seen(page, HALL_POINT)).toBe(false);
+    await expect.poll(() => seen(page, HALL_POINT)).toBe(true);
     for (const id of ["door-reached", "door-opened", "chest-found", "chest-opened"]) {
       await expect(goal(page, id)).toContainText("(not yet)");
     }

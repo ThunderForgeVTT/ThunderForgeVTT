@@ -175,6 +175,7 @@ pub(crate) fn mirror_token_footprints(
         &Sprite,
         Option<&TokenGridBehaviour>,
         Option<&Children>,
+        Option<&crate::systems::token_glide::TokenGlide>,
     )>,
     names: Query<(&Transform, &crate::plugins::nameplate::Nameplate)>,
     bars: Query<&Sprite, With<crate::plugins::status_display::StatusGeometry>>,
@@ -185,35 +186,40 @@ pub(crate) fn mirror_token_footprints(
     }
     let list: FootprintList = tokens
         .iter()
-        .map(|(identity, transform, sprite, behaviour, children)| {
-            let footprint = behaviour.map_or_else(Footprint::default, |b| b.footprint);
-            let size = sprite.custom_size.unwrap_or(Vec2::ZERO);
-            let children = children
-                .map(|c| c.iter().collect::<Vec<_>>())
-                .unwrap_or_default();
-            let name_y = children
-                .iter()
-                .filter_map(|child| names.get(*child).ok())
-                .find(|(_, plate)| !plate.shadow)
-                .map(|(t, _)| t.translation.y * transform.scale.y);
-            let bar_width = children
-                .iter()
-                .filter_map(|child| bars.get(*child).ok())
-                .filter_map(|bar| bar.custom_size.map(|s| s.x))
-                .fold(None, |widest: Option<f32>, w| {
-                    Some(widest.map_or(w, |x| x.max(w)))
-                });
-            serde_json::json!({
-                "tokenId": identity.0,
-                "footprint": footprint.cells(),
-                "x": transform.translation.x,
-                "y": transform.translation.y,
-                "width": size.x * transform.scale.x,
-                "height": size.y * transform.scale.y,
-                "nameY": name_y,
-                "barWidth": bar_width.map(|w| w * transform.scale.x),
-            })
-        })
+        .map(
+            |(identity, transform, sprite, behaviour, children, glide)| {
+                let footprint = behaviour.map_or_else(Footprint::default, |b| b.footprint);
+                let size = sprite.custom_size.unwrap_or(Vec2::ZERO);
+                let children = children
+                    .map(|c| c.iter().collect::<Vec<_>>())
+                    .unwrap_or_default();
+                let name_y = children
+                    .iter()
+                    .filter_map(|child| names.get(*child).ok())
+                    .find(|(_, plate)| !plate.shadow)
+                    .map(|(t, _)| t.translation.y * transform.scale.y);
+                let bar_width = children
+                    .iter()
+                    .filter_map(|child| bars.get(*child).ok())
+                    .filter_map(|bar| bar.custom_size.map(|s| s.x))
+                    .fold(None, |widest: Option<f32>, w| {
+                        Some(widest.map_or(w, |x| x.max(w)))
+                    });
+                serde_json::json!({
+                    "tokenId": identity.0,
+                    "footprint": footprint.cells(),
+                    "x": transform.translation.x,
+                    "y": transform.translation.y,
+                    // Where it is drawn mid-glide (spec 099).
+                    "drawnX": transform.translation.x + glide.map_or(0.0, |g| g.offset().x),
+                    "drawnY": transform.translation.y + glide.map_or(0.0, |g| g.offset().y),
+                    "width": size.x * transform.scale.x,
+                    "height": size.y * transform.scale.y,
+                    "nameY": name_y,
+                    "barWidth": bar_width.map(|w| w * transform.scale.x),
+                })
+            },
+        )
         .collect();
     let slot = TOKEN_FOOTPRINTS.get_or_init(|| std::sync::Mutex::new(Vec::new()));
     if let Ok(mut current) = slot.lock() {
@@ -222,7 +228,7 @@ pub(crate) fn mirror_token_footprints(
 }
 
 /// Every token this engine draws and what it fills, as
-/// `[{"tokenId","footprint","x","y","width","height","nameY","barWidth"}]`
+/// `[{"tokenId","footprint","x","y","drawnX","drawnY","width","height","nameY","barWidth"}]`
 /// in world units. Read-only, for tests (spec 046 US4).
 #[wasm_bindgen::prelude::wasm_bindgen]
 pub fn token_footprints() -> String {

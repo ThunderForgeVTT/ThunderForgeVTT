@@ -1,3 +1,4 @@
+import type { EngineEvent } from "@thunderforge/encounter";
 import { loadEngine, type Engine, type Progress } from "./loadEngine.ts";
 
 // Spec 091 FR-004 to FR-006: one engine and one canvas for the whole page.
@@ -64,12 +65,36 @@ export function sendAs(id: string): Send {
 export const holderId = () => holder?.id ?? null;
 export const running = () => engine;
 
-/** The canvas, while the engine runs and `id` holds the table. */
-export const canvasOf = (id: string) => (engine && holder?.id === id ? canvas : null);
+/**
+ * Spec 098 FR-008: a frame seated at another's table. It sends through the
+ * holder, presses keys on its canvas, and hears the engine's events as
+ * `hear` turns them, while the holder keeps the table.
+ */
+export interface Guest {
+  id: string;
+  hear: (event: EngineEvent) => EngineEvent | null;
+  /** The holder's token for the guest's. */
+  token: (id: string) => string;
+}
 
-/** Sets whose sight the board shows, while `id` holds the table. */
+let guest: Guest | null = null;
+
+/** Seats `next`, or stands the guest up: the board shows all again. */
+export function seatGuest(next: Guest | null) {
+  if (!next && guest && engine && holder) engine.set_viewer_token("");
+  guest = next;
+}
+
+export const guestOf = () => (holder ? guest : null);
+
+/** The canvas, while the engine runs and `id` holds the table or sits at it. */
+export const canvasOf = (id: string) =>
+  engine && (holder?.id === id || (holder && guest?.id === id)) ? canvas : null;
+
+/** Sets whose sight the board shows, while `id` holds the table or sits at it. */
 export function viewAs(id: string, tokenId: string) {
   if (engine && holder?.id === id) engine.set_viewer_token(tokenId);
+  else if (engine && holder && guest?.id === id) engine.set_viewer_token(guest.token(tokenId));
 }
 
 /** Runs `fn` with the engine once it has started, now if it already has. */
@@ -81,6 +106,7 @@ export function whenReady(fn: (e: Engine) => void) {
 /** The panic hook stopped the engine: every later call would throw. */
 export function stopped() {
   engine = null;
+  guest = null;
   loading = null;
   holder = null;
 }

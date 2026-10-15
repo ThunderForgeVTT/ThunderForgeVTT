@@ -67,6 +67,8 @@ resized or re-encoded copy is offered under the same licence (ShareAlike).
 - `tavern-sample.dd2vtt` — the landing page's second room, a tavern on
   grass: 11x8 squares at 128 px, 12 walls, two portals (north and south
   doors), a PNG background.
+- `camp-sample.dd2vtt` — the landing page's campfire beside "Pull up a
+  chair": 8x8 squares at 128 px, no walls or lights, two logs to sit on.
 
 None of the 64 source files surveyed when picking this set had a
 `freestanding: true` portal or a non-empty `objects_line_of_sight[]`

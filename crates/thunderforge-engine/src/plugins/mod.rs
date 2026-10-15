@@ -22,6 +22,7 @@ pub mod lore_link;
 pub mod mesh2d_uv_fix;
 pub mod nameplate;
 pub mod navigation;
+pub mod pathing;
 pub mod placement;
 pub mod render_pause;
 pub mod render_probe;
@@ -32,8 +33,10 @@ pub mod selection;
 pub mod selection_filter;
 pub mod shape;
 pub mod status_display;
+pub mod time_of_day;
 pub mod token;
 pub mod token_culling;
+pub mod token_defeated;
 pub mod touch;
 pub mod wall;
 

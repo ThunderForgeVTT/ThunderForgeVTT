@@ -22,6 +22,7 @@ const SCENE_FIELDS = `
   hidden
   previewUrl
   ambientLight
+  timeOfDay
   backgroundCredit { author licence licenceUrl source catalog shareAlike }
 `;
 
@@ -43,6 +44,28 @@ export function updateSceneAmbientLight(
     `,
     { sceneId, ambientLight },
   ).then((data) => data.updateSceneAmbientLight);
+}
+
+/**
+ * Set a scene's hour (spec 099 US5), at once or over `overSecs` seconds;
+ * `null` takes its clock away. Game Masters only; the server announces it to
+ * everyone showing the scene, with the transition, so all of them run it.
+ */
+export function setSceneTimeOfDay(
+  sceneId: string,
+  hour: number | null,
+  overSecs?: number,
+): Promise<SceneRecord> {
+  return postGraphQL<{ setSceneTimeOfDay: SceneRecord }>(
+    `
+      mutation SetSceneTimeOfDay($sceneId: UUID!, $hour: Float, $overSecs: Float) {
+        setSceneTimeOfDay(sceneId: $sceneId, hour: $hour, overSecs: $overSecs) {
+          ${SCENE_FIELDS}
+        }
+      }
+    `,
+    { sceneId, hour, overSecs: overSecs ?? null },
+  ).then((data) => data.setSceneTimeOfDay);
 }
 
 type ScenesQuery = {

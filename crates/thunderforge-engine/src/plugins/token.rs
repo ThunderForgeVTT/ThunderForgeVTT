@@ -76,6 +76,19 @@ impl Plugin for TokenPlugin {
             PostUpdate,
             crate::systems::token_grid::mirror_token_footprints,
         );
+        // Spec 099 US1: the picture glides; the position never does.
+        app.init_resource::<crate::systems::token_glide::ReducedMotion>();
+        app.add_systems(
+            PostUpdate,
+            (
+                crate::systems::token_glide::track_token_glides
+                    .before(bevy::transform::TransformSystems::Propagate),
+                crate::systems::token_glide::draw_token_glides
+                    .after(bevy::transform::TransformSystems::Propagate),
+                crate::systems::token_glide::mirror_token_glides
+                    .after(crate::systems::token_glide::track_token_glides),
+            ),
+        );
     }
 }
 

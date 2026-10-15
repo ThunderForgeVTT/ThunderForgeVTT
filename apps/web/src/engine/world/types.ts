@@ -572,6 +572,18 @@ export type SetAmbientLightCommand = {
 };
 
 /**
+ * The table's clock (spec 099 US5) — the engine's `set_time_of_day`. An hour
+ * gives the scene a clock whose darkness follows the daylight curve, eased
+ * over `overSecs` when given; `null` takes the clock away, and the scene's
+ * ambient light rules again.
+ */
+export type SetTimeOfDayCommand = {
+  type: "set_time_of_day";
+  hour: number | null;
+  overSecs?: number;
+};
+
+/**
  * How far one token sees, as its game system declares it (spec 045 US6) — the
  * engine's `set_token_vision`.
  *
@@ -665,6 +677,7 @@ export type WorldCommand =
   | SetSceneBackgroundCommand
   | SetSceneGridCommand
   | SetAmbientLightCommand
+  | SetTimeOfDayCommand
   | SetTokenVisionCommand
   | SetCarriedLightCommand
   | SetTokenGridCommand

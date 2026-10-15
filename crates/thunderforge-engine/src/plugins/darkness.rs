@@ -256,7 +256,16 @@ impl Plugin for DarknessPlugin {
             .init_resource::<AmbientShade>()
             .init_resource::<ShadowMap>()
             .init_resource::<ShadowStats>()
-            .add_systems(Update, sync_darkness);
+            .init_resource::<super::time_of_day::TimeOfDay>()
+            .add_systems(
+                Update,
+                (
+                    super::time_of_day::tick_time_of_day,
+                    sync_darkness,
+                    super::time_of_day::fade_night_background,
+                )
+                    .chain(),
+            );
     }
 }
 
@@ -272,6 +281,19 @@ fn darkness_strength(level: Illumination) -> f32 {
         Illumination::Dim => 0.35,
         Illumination::Dark => 0.92,
     }
+}
+
+/// How dark the map is drawn (spec 099 FR-006): an explicit shade, then the
+/// clock, then the ambient level.
+pub(crate) fn drawn_darkness(
+    shade: Option<&AmbientShade>,
+    clock: Option<f32>,
+    level: Illumination,
+) -> f32 {
+    shade
+        .and_then(|shade| shade.0)
+        .or(clock)
+        .unwrap_or_else(|| darkness_strength(level))
 }
 
 /// A light, where it actually is: a light carried by a token is where the
@@ -444,6 +466,7 @@ fn sync_darkness(
     mut commands: Commands,
     ambient: Option<Res<SceneAmbient>>,
     shade: Option<Res<AmbientShade>>,
+    time_of_day: Option<Res<super::time_of_day::TimeOfDay>>,
     time: Res<Time>,
     light_set: Res<LightSet>,
     wall_set: Res<WallSet>,
@@ -453,7 +476,11 @@ fn sync_darkness(
     mut shadows: ResMut<ShadowMap>,
     mut stats: ResMut<ShadowStats>,
     eyes: Option<Res<Eyes>>,
-    tokens: Query<(&Transform, &TokenIdentity)>,
+    tokens: Query<(
+        &Transform,
+        &TokenIdentity,
+        Option<&crate::systems::token_glide::TokenGlide>,
+    )>,
     cameras: Query<(&Projection, &GlobalTransform), With<Camera2d>>,
     mut existing: Query<
         (Entity, &MeshMaterial2d<DarknessMaterial>, &mut Transform),
@@ -464,13 +491,24 @@ fn sync_darkness(
         thunderforge_canvas_core::vision::AmbientLight::daylight,
         |a| a.0,
     );
-    let strength = shade
-        .and_then(|shade| shade.0)
-        .unwrap_or_else(|| darkness_strength(ambient.level));
+    // Spec 099 FR-006: an explicit shade, then the clock, then the level.
+    let clock = time_of_day.as_ref().and_then(|t| t.shade());
+    let strength = drawn_darkness(shade.as_deref(), clock, ambient.level);
+    // Spec 099 US3: how much a night light burns now.
+    let night = super::time_of_day::TimeOfDay::night_factor(strength);
+    let by_night = |id: &str| {
+        time_of_day
+            .as_ref()
+            .is_some_and(|t| t.night_lights.contains(id))
+    };
 
     let positions: HashMap<String, Vec2> = tokens
         .iter()
-        .map(|(transform, identity)| (identity.0.clone(), transform.translation.truncate()))
+        // Where the token is drawn, so a carried torch glides with it.
+        .map(|(transform, identity, glide)| {
+            let drawn = transform.translation.truncate() + glide.map_or(Vec2::ZERO, |g| g.offset());
+            (identity.0.clone(), drawn)
+        })
         .collect();
     // Where the viewer stands, if this client looks through a token (spec
     // 076). A token named but not in the scene is nobody's eyes.
@@ -499,6 +537,8 @@ fn sync_darkness(
     let placed: Vec<Placed> = light_set
         .lights()
         .iter()
+        // A night light is out by day: it costs no slot.
+        .filter(|light| night > 0.0 || !by_night(&light.id))
         .filter_map(|light| {
             Some(Placed {
                 light,
@@ -522,11 +562,15 @@ fn sync_darkness(
 
     let mut uniform = DarknessUniform {
         ambient: {
-            let tint = ambient.color.unwrap_or(Rgb {
-                r: 0.02,
-                g: 0.03,
-                b: 0.08,
-            });
+            // The clock owns the shadow's colour: amber at dusk, blue by night.
+            let tint = match clock {
+                Some(_) => thunderforge_canvas_core::daylight::tint_at(strength),
+                None => ambient.color.unwrap_or(Rgb {
+                    r: 0.02,
+                    g: 0.03,
+                    b: 0.08,
+                }),
+            };
             Vec4::new(tint.r, tint.g, tint.b, strength)
         },
         ..Default::default()
@@ -543,7 +587,11 @@ fn sync_darkness(
             .as_deref()
             .and_then(Rgb::parse_hex)
             .unwrap_or(Rgb::WHITE);
-        uniform.light_colors[index] = Vec4::new(color.r, color.g, color.b, light.intensity);
+        let intensity = match by_night(&light.id) {
+            true => light.intensity * night,
+            false => light.intensity,
+        };
+        uniform.light_colors[index] = Vec4::new(color.r, color.g, color.b, intensity);
         if light.flicker > 0.0 {
             uniform.light_flicker[index] = Vec4::new(light.flicker, phase_of(&light.id), 0.0, 0.0);
         }
