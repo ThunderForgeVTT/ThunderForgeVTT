@@ -19,6 +19,7 @@ pub mod item;
 pub mod lighting;
 pub mod lighting_overlay;
 pub mod lore_link;
+pub mod mesh2d_uv_fix;
 pub mod nameplate;
 pub mod navigation;
 pub mod placement;
