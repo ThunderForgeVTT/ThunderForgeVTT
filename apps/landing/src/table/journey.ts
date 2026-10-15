@@ -25,13 +25,24 @@ export interface Pt {
 export interface Doc {
   w: number;
   h: number;
+  /** The page's y at the world's origin: its middle when first measured at
+   * this width. It stays while the page grows or shrinks, so a line of new
+   * words moves nothing on the table. */
+  mid: number;
 }
 
 /**
  * Page pixels to the engine's world: one world unit is one pixel at scale 1,
- * the scene is centred on the origin, and +y is up.
+ * the origin is the page's `mid`, and +y is up.
  */
-export const toWorld = (p: Pt, doc: Doc): Pt => ({ x: p.x - doc.w / 2, y: doc.h / 2 - p.y });
+export const toWorld = (p: Pt, doc: Doc): Pt => ({ x: p.x - doc.w / 2, y: doc.mid - p.y });
+
+/** The engine's world to page pixels. */
+export const fromWorld = (p: Pt, doc: Doc): Pt => ({ x: p.x + doc.w / 2, y: doc.mid - p.y });
+
+/** The table's height: the engine centres its mat on the origin, so the mat
+ * reaches as far above the origin as below it, and covers the whole page. */
+export const tableHeight = (doc: Doc) => 2 * Math.max(doc.mid, doc.h - doc.mid);
 
 /** The hero's path down the page: along one gutter, crossing in the gaps. */
 export function pathDown(boxes: Box[], doc: Doc, cell: number): Pt[] {

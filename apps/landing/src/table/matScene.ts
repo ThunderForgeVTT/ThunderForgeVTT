@@ -63,7 +63,7 @@ export class MatScene {
     this.walls = seen;
 
     const m = mat.map;
-    const mapId = m ? `${this.kind}-map-${[m.x, m.y, m.w, m.h, doc.w, doc.h].map(Math.round).join("-")}` : null;
+    const mapId = m ? `${this.kind}-map-${[m.x, m.y, m.w, m.h, doc.w, doc.mid].map(Math.round).join("-")}` : null;
     if (this.map && this.map !== mapId) {
       this.send({ type: "remove_canvas_image_asset", assetId: this.map });
       this.map = null;

@@ -67,7 +67,7 @@ export class BoardArt {
   }
 
   draw(b: Board | null, doc: Doc, live: boolean) {
-    const id = b ? `room-map-${[b.x, b.y, b.w, b.h, doc.w, doc.h].map(Math.round).join("-")}` : null;
+    const id = b ? `room-map-${[b.x, b.y, b.w, b.h, doc.w, doc.mid].map(Math.round).join("-")}` : null;
     if (this.id && this.id !== id) this.clear();
     if (!b || !id || this.id || !live) return;
     const c = toWorld({ x: b.x + b.w / 2, y: b.y + b.h / 2 }, doc);

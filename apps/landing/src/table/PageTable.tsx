@@ -15,6 +15,8 @@ import {
   hourAt,
   pathDown,
   toWorld,
+  fromWorld,
+  tableHeight,
   torchesAlong,
   type Box,
   type Doc,
@@ -97,8 +99,11 @@ function cellSize(): number {
   return Number.isFinite(v) && v > 0 ? v : 48;
 }
 
-function measure(): { boxes: Box[]; doc: Doc } {
-  const doc = { w: document.documentElement.clientWidth, h: document.documentElement.scrollHeight };
+function measure(was: Doc): { boxes: Box[]; doc: Doc } {
+  const w = document.documentElement.clientWidth;
+  const h = document.documentElement.scrollHeight;
+  // The origin holds while the width does: new words grow the page, not move it.
+  const doc = { w, h, mid: w === was.w && was.mid > 0 ? was.mid : h / 2 };
   const boxes: Box[] = [];
   document.querySelectorAll<HTMLElement>("[data-section], #tavern, #room").forEach((el) => {
     const r = el.getBoundingClientRect();
@@ -163,7 +168,7 @@ export default function PageTable() {
   const live = useRef({
     phase: "idle" as Phase,
     hero: PARTY[0]! as Walker,
-    doc: { w: 1, h: 1 } as Doc,
+    doc: { w: 1, h: 1, mid: 0 } as Doc,
     path: [] as Pt[],
     /** The path below the first screen; `path` is this from the hero's mat spot. */
     rest: [] as Pt[],
@@ -207,8 +212,8 @@ export default function PageTable() {
   const send = useRef<Send>((command) => {
     const token = command.token as { id?: string; x?: number; y?: number } | undefined;
     if (command.type === "upsert_token" && token?.id === WALKER && stage.current) {
-      const { doc } = live.current;
-      stage.current.dataset.walker = `${Math.round(token.x! + doc.w / 2)},${Math.round(doc.h / 2 - token.y!)}`;
+      const at = fromWorld({ x: token.x!, y: token.y! }, live.current.doc);
+      stage.current.dataset.walker = `${Math.round(at.x)},${Math.round(at.y)}`;
     }
     sendAll(command);
   }).current;
@@ -337,7 +342,7 @@ export default function PageTable() {
     if (!e?.plan_path || canvasOf(PAGE) === null) return null;
     const L = live.current;
     const { doc, cell } = L;
-    const grid = { size: cell, originX: -doc.w / 2, originY: doc.h / 2 };
+    const grid = { size: cell, originX: -doc.w / 2, originY: doc.mid };
     const bounds = { min: { q: 0, r: -Math.ceil(doc.h / cell) }, max: { q: Math.ceil(doc.w / cell) - 1, r: -1 } };
     // Round the dungeon's board and the camp, but straight into them by their top.
     const maps = [currentBoard(), currentCamp()].filter((m) => m !== null);
@@ -346,7 +351,7 @@ export default function PageTable() {
       if (maps.some((m) => inside(m, a) || inside(m, b))) return null;
       const ask = { from: toWorld(a, doc), to: toWorld(b, doc), grid, bounds, blocked, maxNodes: 40000 };
       const way = (JSON.parse(e.plan_path!(JSON.stringify(ask))) as { path: Pt[] | null }).path;
-      return way?.map((p) => ({ x: p.x + doc.w / 2, y: doc.h / 2 - p.y })) ?? null;
+      return way?.map((p) => fromWorld(p, doc)) ?? null;
     };
   }, []);
 
@@ -413,8 +418,9 @@ export default function PageTable() {
       type: "set_scene_grid",
       gridType: "square",
       size: L.cell,
-      mapWidth: L.doc.w,
-      mapHeight: L.doc.h,
+      // Its cells start at the page's top left corner.
+      originX: -L.doc.w / 2,
+      originY: L.doc.mid,
       visible: true,
       color: GRID_INK,
     });
@@ -425,7 +431,7 @@ export default function PageTable() {
       backgroundImagePath: "/table/mat.png",
       nightImagePath: "/table/mat-night.png",
       width: L.doc.w,
-      height: L.doc.h,
+      height: tableHeight(L.doc),
     });
   }, [send]);
 
@@ -514,10 +520,10 @@ export default function PageTable() {
     // Out of the page's way while it is measured, so it never adds to it.
     stage.current?.style.setProperty("top", "0px");
     stage.current?.style.setProperty("height", "0px");
-    const { boxes, doc } = measure();
-    const moved = doc.w !== L.doc.w || doc.h !== L.doc.h;
+    const { boxes, doc } = measure(L.doc);
     L.cell = cellSize();
     L.doc = doc;
+    if (stage.current) stage.current.dataset.mid = `${doc.mid}`;
     size();
     L.rest = pathDown(boxes, doc, L.cell);
     L.path = L.rest;
@@ -530,14 +536,15 @@ export default function PageTable() {
     light(boxes);
     if (!L.free) L.target = along(L.path, fraction(window.scrollY, doc, window.innerHeight));
     drawMat();
-    // The world's origin is the page's middle, so a page that grew moved
-    // everything on it: a hero standing still must be told where it is now.
+    // A new width moves the world's origin, and everything on it: a hero
+    // standing still must be told where it is now.
     if (L.phase === "running" && !seatedAt()) send(heroToken(L.hero, toWorld(L.pos, doc)));
-    // A seated room was sent in the old world's units: an opened door that
-    // grew the page left its walls and fog a half-cell off the map. It sits
-    // down again where the board now lies.
+    // A seated room whose board moved on the page, or whose world did, sits
+    // down again where the board now lies, or its walls and fog are off the map.
     const b = currentBoard();
-    if (moved && b && seatedAt()) seat(placeOf(b, doc, L.cell, WALKER));
+    const was = seatedAt();
+    const now = b && was ? placeOf(b, doc, L.cell, WALKER) : null;
+    if (now && was && (now.x !== was.x || now.y !== was.y || now.k !== was.k)) seat(now);
     L.hour = -1;
     clock();
     place(true);

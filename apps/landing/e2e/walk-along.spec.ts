@@ -95,11 +95,10 @@ test.describe("the hero walks a wide page", () => {
     // The engine plans round the tavern's walls: from the seat to a point
     // under the tavern's west end, its way goes out by the door.
     const ask = (p: Pt) => {
-      const doc = { w: 1440 - scrollbar, h: docH };
-      return { x: p.x - doc.w / 2, y: doc.h / 2 - p.y };
+      return { x: p.x - (1440 - scrollbar) / 2, y: mid - p.y };
     };
     const scrollbar = await page.evaluate(() => 1440 - document.documentElement.clientWidth);
-    const docH = await page.evaluate(() => document.documentElement.scrollHeight);
+    const mid = await page.evaluate(() => +document.querySelector<HTMLElement>("[data-mid]")!.dataset.mid!);
     const way = await engine<{ path: Pt[] | null }>(
       page,
       "plan_path",
@@ -291,14 +290,14 @@ test.describe("the hero walks a wide page", () => {
       // Everyone the visitor did not pick is on a log seat (FR-010).
       const doc = await page.evaluate(() => ({
         w: document.documentElement.clientWidth,
-        h: document.documentElement.scrollHeight,
+        mid: +document.querySelector<HTMLElement>("[data-mid]")!.dataset.mid!,
       }));
       await expect
         .poll(async () => {
           const all = await engine<Array<{ tokenId: string; x: number; y: number }>>(page, "token_footprints");
           return all
             .filter((t) => t.tokenId.startsWith("camp-"))
-            .map((t) => square({ x: t.x + doc.w / 2, y: doc.h / 2 - t.y }))
+            .map((t) => square({ x: t.x + doc.w / 2, y: doc.mid - t.y }))
             .sort();
         })
         .toEqual([
@@ -455,7 +454,7 @@ test.describe("the hero stays on a phone's screen", () => {
     const at = await page.evaluate(
       (p) => ({
         x: p.x + document.documentElement.clientWidth / 2,
-        y: document.documentElement.scrollHeight / 2 - p.y - scrollY,
+        y: +document.querySelector<HTMLElement>("[data-mid]")!.dataset.mid! - p.y - scrollY,
       }),
       icon!,
     );
@@ -468,15 +467,14 @@ test.describe("the hero stays on a phone's screen", () => {
     await expect.poll(async () => (await saidLog(page)).slice(n)).toHaveLength(1);
     expect((await saidLog(page)).at(-1)).toMatch(/^You open the door to the hall\./);
 
-    // The opened door grew the page by a line; the world is centred on the
-    // page, so the room sits again: its door stays on the map's door.
+    // The opened door grew the page by a line: its door stays on the map's door.
     await expect
       .poll(async () => {
         const now = (await engine<(typeof icon)[]>(page, "door_icons")).find((i) => i!.wallId === "door-hall");
         const there = await page.evaluate(
           (p) => ({
             x: p.x + document.documentElement.clientWidth / 2,
-            y: document.documentElement.scrollHeight / 2 - p.y - scrollY,
+            y: +document.querySelector<HTMLElement>("[data-mid]")!.dataset.mid! - p.y - scrollY,
           }),
           now!,
         );
@@ -504,6 +502,16 @@ test.describe("the hero stays on a phone's screen", () => {
     await roll.click();
     await expect.poll(async () => (await saidLog(page)).length, { timeout: 15_000 }).toBeGreaterThan(r);
     expect((await saidLog(page)).slice(r).join(" ")).toMatch(/1d20\+2|\b12\b|open/i);
+
+    // Once the dice land, the total stands over the chest, then goes; a miss
+    // asks again.
+    const told = page.getByTestId("room-board-told");
+    await expect(told).toBeInViewport();
+    await expect(told).toHaveText(/^\d+ vs DC \d+ · (it opens!|not enough)$/);
+    const missed = /not enough/.test((await told.textContent())!);
+    await expect(told).toHaveCount(0, { timeout: 6_000 });
+    if (missed) await expect(roll).toHaveText("Roll again");
+    else await expect(roll).toHaveCount(0);
   });
 });
 
