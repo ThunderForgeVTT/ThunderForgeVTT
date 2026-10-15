@@ -1,5 +1,5 @@
 const FALLBACK_SITE_URL = "https://example.com";
-const FALLBACK_OG_IMAGE = "/social-card.svg";
+const FALLBACK_OG_IMAGE = "/social-card.png";
 
 function normalizeBaseUrl(url: string): string {
   return url.endsWith("/") ? url : `${url}/`;
