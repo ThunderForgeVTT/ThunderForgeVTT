@@ -26,7 +26,12 @@ export class MatScene {
   private art = new Map<string, string>();
   private drawing = new Set<string>();
 
-  constructor(private send: Send) {}
+  /** `live`: the engine runs and the page holds it. While it does not, sends
+   * are dropped, so nothing may count as on the table. */
+  constructor(
+    private send: Send,
+    private live: () => boolean,
+  ) {}
 
   /** Sends what changed. `skip`: the piece the page's walker stands in for. */
   draw(mat: Mat, doc: Doc, cell: number, skip: string | null) {
@@ -69,7 +74,7 @@ export class MatScene {
    * table never shows it as a bare square. */
   private put(id: string) {
     const want = this.tokens.get(id);
-    if (!want) return;
+    if (!want || !this.live()) return;
     if (this.sent.has(id)) {
       this.send({ type: "upsert_token", token: want.token });
       return;

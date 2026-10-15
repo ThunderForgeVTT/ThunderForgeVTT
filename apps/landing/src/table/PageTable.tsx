@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { createHero, PRESET_HEROES, type HeroSpec } from "@thunderforge/heroes";
-import { holderId, sendAs, take, type Send } from "../engine/host.ts";
+import { canvasOf, holderId, sendAs, take, type Send } from "../engine/host.ts";
 import { listen } from "../engine/dispatch.ts";
 import type { Progress } from "../engine/loadEngine.ts";
 import { PARTY } from "../room/party.ts";
@@ -149,7 +149,7 @@ export default function PageTable() {
 
   const send = useRef<Send>(sendAs(PAGE)).current;
   const mat = useRef<MatScene | null>(null);
-  mat.current ??= new MatScene(send);
+  mat.current ??= new MatScene(send, () => canvasOf(PAGE) !== null);
 
   const go = useCallback((next: Phase) => {
     live.current.phase = next;
