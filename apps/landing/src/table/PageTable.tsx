@@ -4,7 +4,7 @@ import { canvasOf, holderId, running, sendAs, take, type Send } from "../engine/
 import { listen } from "../engine/dispatch.ts";
 import type { Progress } from "../engine/loadEngine.ts";
 import { PARTY } from "../room/party.ts";
-import { journeyHero, setJourneyHero, type Walker } from "./journeyHero.ts";
+import { journeyHero, setJourneyHero, watchJourneyHero, type Walker } from "./journeyHero.ts";
 import { rasterize, svgUrl } from "./heroArt.ts";
 import { announcePage, PAGE_TABLE } from "./onPage.ts";
 import "./page-table.css";
@@ -797,16 +797,40 @@ export default function PageTable() {
     return () => cancelAnimationFrame(raf);
   }, [send, sit, stand]);
 
-  const pick = (h: Walker) => {
+  /** `h` walks the page from here on. */
+  const walkAs = (h: Walker) => {
+    const L = live.current;
+    // Still on their seat in the tavern, the two trade seats at once: no
+    // walk across the room, no two on one square. The engine glides a moved
+    // token, so the walker is lifted and set down instead.
+    const seatOf = (w: Walker) => (w.data ? undefined : currentMat()?.pieces.find((p) => p.id === w.slug));
+    const was = seatOf(L.hero);
+    const next = seatOf(h);
+    const seated = was && Math.hypot(L.pos.x - centreOf(was).x, L.pos.y - centreOf(was).y) < L.cell / 2;
     setHero(h);
-    setJourneyHero(h);
-    live.current.hero = h;
+    L.hero = h;
     if (!h.data) setSpec(presetSpec(h.slug));
-    if (live.current.phase === "running") {
-      send(heroToken(h, toWorld(live.current.pos, live.current.doc), true));
+    if (L.phase === "running") {
+      const swap = seated && next;
+      if (swap) {
+        L.pos = L.target = centreOf(next);
+        // The old route starts on the old seat: a new one, from this one.
+        L.route = null;
+        send({ type: "remove_token", tokenId: WALKER });
+      }
+      send(heroToken(h, toWorld(L.pos, L.doc), true));
+      if (swap) send({ type: "set_controlled_token", tokenId: WALKER });
       drawMat();
     }
   };
+  const pick = (h: Walker) => {
+    walkAs(h);
+    setJourneyHero(h);
+  };
+  // One of the party tapped in the tavern.
+  const walking = useRef(walkAs);
+  walking.current = walkAs;
+  useEffect(() => watchJourneyHero((h) => h !== live.current.hero && walking.current(h)), []);
 
   // A token dragged or a door swung on the first screen.
   useEffect(() => watchMat(() => live.current.phase === "running" && drawMat()), [drawMat]);

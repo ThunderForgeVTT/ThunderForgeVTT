@@ -1,6 +1,8 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { CC_BY_SA, MAPS_CATALOG, MAPS_SOURCE } from "../links.ts";
+import { PARTY } from "../room/party.ts";
 import { publishMat, type MatPiece, type MatSeg } from "../table/heroMat.ts";
+import { setJourneyHero } from "../table/journeyHero.ts";
 
 // The page opens in the tavern, beside the headline or under it: every
 // adventure starts in one. The map lies on the page's own grid, one square to a cell,
@@ -30,6 +32,12 @@ const FOE_SPOTS = [
   { c: 6, r: 12 },
   { c: 4, r: 14 },
 ];
+/** A tap on one of the party: that hero walks the page. */
+function walkAs(id: string) {
+  const hero = PARTY.find((h) => h.slug === id);
+  if (hero) setJourneyHero(hero);
+}
+
 /** The back door, in the south wall: the way out to the page. */
 const EXIT = { c: 5.5, r: 7.5 };
 
@@ -148,13 +156,18 @@ export function HeroTavern({ party, foes = [] }: { party: TavernPiece[]; foes?: 
         <img className="hero-tavern-art" src={MAP} alt="" width={1408} height={1024} />
         {cell > 0 &&
           party.slice(0, SPOTS.length).map((p, i) => (
-            <img
+            <button
               key={p.id}
-              className="hero-tavern-token"
-              src={p.src}
-              alt={p.name}
+              type="button"
+              className="hero-tavern-token hero-tavern-pick"
+              data-hero={p.id}
+              aria-label={`Walk the page as ${p.name.split(" (")[0]}`}
+              title={p.name.split(" (")[0]}
+              onClick={() => walkAs(p.id)}
               style={{ left: SPOTS[i]!.c * cell, top: SPOTS[i]!.r * cell, width: cell, height: cell }}
-            />
+            >
+              <img src={p.src} alt="" />
+            </button>
           ))}
         {cell > 0 &&
           foes.slice(0, FOE_SPOTS.length).map((p, i) => (

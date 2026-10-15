@@ -193,6 +193,36 @@ test.describe("the hero walks a wide page", () => {
     expect(at.y).toBeLessThan(fifth.bottom + 2 * cell);
   });
 
+  test("one of the party tapped in the tavern walks the page from their seat", async ({ page }) => {
+    await openLanding(page, { settle: false });
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await page.reload();
+    await expect(page.locator("body.in-engine")).toBeAttached({ timeout: BOOT_TIMEOUT });
+    await watchWalker(page);
+    await scrollAndSettle(page, 0);
+    await expect.poll(() => walker(page), { timeout: 15_000 }).not.toBeNull();
+
+    const face = page.locator(".journey-face img");
+    const was = (await face.getAttribute("src"))!;
+    const seat = page.locator(".hero-tavern-pick").filter({ visible: true });
+    const slugs = await seat.evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.hero!));
+    const slug = slugs.find((s) => !was.includes(s))!;
+    const tapped = page.locator(`.hero-tavern-pick[data-hero="${slug}"]`);
+    const at = await tapped.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      return { x: r.left + scrollX + r.width / 2, y: r.top + scrollY + r.height / 2, cell: r.width };
+    });
+    await page.evaluate(() => ((window as unknown as { walk: Pt[] }).walk = []));
+    await tapped.click();
+
+    // The walker takes the tapped seat at once, without crossing the room.
+    await expect(face).toHaveAttribute("src", new RegExp(slug));
+    const there = await scrollAndSettle(page, 0);
+    expect(Math.hypot(there.x - at.x, there.y - at.y)).toBeLessThan(at.cell / 2);
+    const steps = (await walk(page)).filter((p) => Math.hypot(p.x - at.x, p.y - at.y) >= at.cell / 2);
+    expect(steps.length, "the walker crossed the room").toBeLessThanOrEqual(1);
+  });
+
   test("it walks into the dungeon by its top, and round it when the room is not played", async ({ page }) => {
     await openLanding(page, { settle: false });
     await page.emulateMedia({ reducedMotion: "no-preference" });
