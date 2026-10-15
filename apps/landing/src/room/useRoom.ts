@@ -19,6 +19,7 @@ import {
 import type { FrameState, Send } from "../engine/EngineFrame.tsx";
 import { listen } from "../engine/dispatch.ts";
 import { canvasOf, running, viewAs } from "../engine/host.ts";
+import { throwId } from "../dice.ts";
 import { pressOnCanvas } from "../engine/keys.ts";
 import { PARTY, type PartyHero } from "./party.ts";
 import { rollFormula } from "./roll.ts";
@@ -270,7 +271,8 @@ export function useRoom(script: RoomScript, frameId: string) {
       const judged = referee.rolled(now.current, resolution);
       apply(judged);
       if (judged.outcome.accepted) {
-        engine.current.send?.(diceCommand(resolution, { rollerName: heroNow.current.name }));
+        const throw_ = { rollerName: heroNow.current.name, id: throwId() };
+        engine.current.send?.(diceCommand(resolution, throw_));
       }
       if (judged.outcome.announcement === "roll-succeeded") sparkle();
     } catch {

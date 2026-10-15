@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { diceCommand, type Resolution } from "@thunderforge/dice-throw";
-import { dice, seed } from "../dice.ts";
+import { dice, seed, throwId } from "../dice.ts";
 import EngineFrame, { type FrameState, type Send } from "../engine/EngineFrame.tsx";
 import { sendAs } from "../engine/host.ts";
 import { onPage, PAGE_TABLE, watchPage } from "../table/onPage.ts";
@@ -93,7 +93,7 @@ export default function DiceTray() {
   }, []);
 
   function thrown(r: Resolution) {
-    const command = diceCommand(r, { rollerName: "You" });
+    const command = diceCommand(r, { rollerName: "You", id: throwId() });
     if (onPage()) {
       toPage(command);
       return;
@@ -111,22 +111,25 @@ export default function DiceTray() {
 
   async function roll(f: string) {
     setFormula(f);
+    let r: Resolution;
     try {
       const m = await dice();
       if (!m.validateFormula(f)) {
         setError(`"${f}" is not a formula the dice understand.`);
         return;
       }
-      const r = JSON.parse(m.roll(f, "{}", seed())) as Resolution;
-      setError("");
-      setResult(r);
-      thrown(r);
-      count.current += 1;
-      const total = "Total" in r.kind ? r.kind.Total : `${r.kind.SuccessCount} successes`;
-      setHistory((h) => [`${r.formula} → ${total}`, ...h].slice(0, 4));
+      r = JSON.parse(m.roll(f, "{}", seed())) as Resolution;
     } catch {
       setError(`"${f}" is not a formula the dice understand.`);
+      return;
     }
+    setError("");
+    setResult(r);
+    count.current += 1;
+    const total = "Total" in r.kind ? r.kind.Total : `${r.kind.SuccessCount} successes`;
+    setHistory((h) => [`${r.formula} → ${total}`, ...h].slice(0, 4));
+    // Last, so a table that fails to draw the throw still leaves the result.
+    thrown(r);
   }
 
   function submit(e: FormEvent) {
