@@ -128,12 +128,12 @@ Paths are relative to the repo root; `web/` means `apps/web/src/`.
 **Goal**: a cleared gate is remembered; a lost claim still redirects.
 **Independent test**: SC-003.
 
-- [ ] T021 [US3] Add to `world-navigation.spec.ts`: a player with a
+- [X] T021 [US3] Add to `world-navigation.spec.ts`: a player with a
   character returns to the overview with no `page-loader`; then the GM
   releases the claim (`unclaimActor` via `graphql`), the player opens
   Players and then Overview and lands on `/world/:id/actor-select`. See
   the first half fail.
-- [ ] T022 [US3] `web/hooks/useActorClaimGate.ts`: initial `cleared` from
+- [X] T022 [US3] `web/hooks/useActorClaimGate.ts`: initial `cleared` from
   `claimCleared`; write `true` when the check clears, `false` before
   redirecting; the re-check runs on every mount; errors keep the existing
   fail-open (research R5). The overview's loader stops waiting on a

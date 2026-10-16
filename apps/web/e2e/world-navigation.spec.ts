@@ -151,6 +151,86 @@ test.describe("Spec 101: smooth world navigation", () => {
     await player.context().close();
   });
 
+  test("the overview remembers a cleared character check, and a lost claim still redirects (SC-003)", async ({
+    page,
+    browser,
+  }) => {
+    const worldId = await registerAndCreateWorld(
+      page,
+      `E2E Navigation Claim ${uniqueSuffix()}`,
+    );
+    const created = await graphql<{
+      data?: { createActor?: { id: string } };
+    }>(
+      page,
+      `
+        mutation ($input: CreateActorInput!) {
+          createActor(input: $input) {
+            id
+          }
+        }
+      `,
+      { input: { worldId, label: `Wren ${uniqueSuffix()}`, isNpc: false } },
+    );
+    const actorId = created.data?.createActor?.id;
+    expect(actorId).toBeTruthy();
+    await graphql(
+      page,
+      `
+        mutation ($actorId: UUID!) {
+          setActorAvailability(actorId: $actorId, available: true) {
+            id
+          }
+        }
+      `,
+      { actorId },
+    );
+    const player = await inviteAndJoinAsPlayer(browser, page, worldId);
+    const claimed = await graphql<{
+      data?: { claimActor?: { actorId: string } };
+      errors?: unknown;
+    }>(
+      player,
+      `
+        mutation ($worldId: UUID!, $actorId: UUID!) {
+          claimActor(worldId: $worldId, actorId: $actorId) {
+            actorId
+          }
+        }
+      `,
+      { worldId, actorId },
+    );
+    expect(claimed.errors).toBeUndefined();
+
+    await player.goto(`/world/${worldId}`);
+    await expect(player.getByTestId("world-staging-page")).toBeVisible();
+    await watchPaints(player);
+    await goBySidebar(player, "Players", /\/players$/);
+    await goBySidebar(player, "Overview", new RegExp(`/world/${worldId}$`));
+    await expect(player.getByTestId("world-staging-page")).toBeVisible();
+    expect((await seen(player)).loader).toBe(0);
+
+    // The check still runs behind the page: a claim lost while the player
+    // is elsewhere sends them back to choose on their next visit, even
+    // though the overview starts from the remembered clearance.
+    await goBySidebar(player, "Players", /\/players$/);
+    const released = await graphql<{ errors?: unknown }>(
+      page,
+      `
+        mutation ($actorId: UUID!) {
+          unclaimActor(actorId: $actorId) {
+            id
+          }
+        }
+      `,
+      { actorId },
+    );
+    expect(released.errors).toBeUndefined();
+    await goBySidebar(player, "Overview", new RegExp(`/world/${worldId}$`));
+    await player.waitForURL(new RegExp(`/world/${worldId}/actor-select$`));
+    await player.context().close();
+  });
+
   test("a change made elsewhere shows on the next page (FR-003)", async ({
     page,
   }) => {

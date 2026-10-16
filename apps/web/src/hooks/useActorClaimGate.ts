@@ -16,6 +16,10 @@
  * contracts/graphql-actor-claim.md), so this hook must distinguish
  * "never gated" from "gated, no claim yet" before deciding whether to
  * check.
+ *
+ * Spec 101 US3: a gate that let this person in is remembered in the world
+ * store, so a return to the overview renders at once. The check still runs
+ * on every visit, behind the page, and a lost claim still redirects.
  */
 
 import { useEffect, useState } from "react";
@@ -23,6 +27,7 @@ import { useNavigate } from "react-router-dom";
 import { getMyActorClaim } from "@/api/actorClaims";
 import { getMyWorldMemberRole } from "@/api/world";
 import { useAuth } from "@/hooks/useAuth";
+import { useWorldChromeStore } from "@/hooks/world-chrome-context";
 import {
   isWorldMemberRole,
   runsTheWorld,
@@ -67,6 +72,8 @@ export function useActorClaimGate(
 ): UseActorClaimGateResult {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { chrome, remember } = useWorldChromeStore();
+  const remembered = chrome[worldId]?.claimCleared === true;
   const [exempt, setExempt] = useState(false);
   const [hasClaim, setHasClaim] = useState(false);
   const [lookingAround, setLookingAround] = useState(false);
@@ -78,9 +85,12 @@ export function useActorClaimGate(
   // that same created_by fallback here, matching `useWorldRole`'s own
   // logic, rather than relying on the query alone.
   const isCreator = !!world && !!user && world.createdBy === user.id;
+  // The world's id, not the record: a background refresh of the world must
+  // not run the check a second time.
+  const knownWorldId = world?.id;
 
   useEffect(() => {
-    if (!worldId || !world || !user || isCreator) {
+    if (!worldId || !knownWorldId || !user || isCreator) {
       return;
     }
 
@@ -95,6 +105,7 @@ export function useActorClaimGate(
         // character like any Player (ADR-099), so they are sent to choose one.
         if (role !== null && isWorldMemberRole(role) && runsTheWorld(role)) {
           setExempt(true);
+          remember(worldId, { claimCleared: true });
           return;
         }
         return getMyActorClaim(worldId).then((claim) => {
@@ -103,9 +114,11 @@ export function useActorClaimGate(
           }
           if (claim) {
             setHasClaim(true);
+            remember(worldId, { claimCleared: true });
           } else if (isLookingAround(worldId)) {
             setLookingAround(true);
           } else {
+            remember(worldId, { claimCleared: false });
             navigate(`/world/${worldId}/actor-select`, { replace: true });
           }
         });
@@ -121,10 +134,10 @@ export function useActorClaimGate(
     return () => {
       active = false;
     };
-  }, [worldId, world, user, isCreator, navigate]);
+  }, [worldId, knownWorldId, user, isCreator, navigate, remember]);
 
   return {
-    cleared: isCreator || exempt || hasClaim || lookingAround,
+    cleared: isCreator || remembered || exempt || hasClaim || lookingAround,
     lookingAround: !isCreator && !exempt && !hasClaim && lookingAround,
   };
 }
