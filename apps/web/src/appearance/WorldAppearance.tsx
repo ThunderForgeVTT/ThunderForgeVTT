@@ -14,6 +14,10 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 
 import { getWorld } from "@/api/world";
+import {
+  useRememberWorldChrome,
+  useWorldChrome,
+} from "@/hooks/world-chrome-context";
 import { subscribeToWorldEvents } from "@/engine/world/sync/subscriptionClient";
 import { startAppearanceEventSync } from "@/engine/world/sync/appearance";
 
@@ -25,29 +29,24 @@ interface WorldAppearanceProps {
   children: ReactNode;
 }
 
-export function WorldAppearance({ worldId, children }: WorldAppearanceProps) {
-  const [packId, setPackId] = useState<string | null>(null);
-  const [revision, setRevision] = useState(0);
+const readInterfacePack = (worldId: string) =>
+  getWorld(worldId).then((world) => world?.interfacePackId ?? null);
 
-  useEffect(() => {
-    let isMounted = true;
-    getWorld(worldId)
-      .then((world) => {
-        if (isMounted) setPackId(world?.interfacePackId ?? null);
-      })
-      // A look that cannot be read costs nothing: the base pack applies and
-      // every action still works (FR-018).
-      .catch(() => undefined);
-    return () => {
-      isMounted = false;
-    };
-  }, [worldId]);
+export function WorldAppearance({ worldId, children }: WorldAppearanceProps) {
+  // Shared, so a page change keeps the world's look instead of flashing the
+  // base pack while this page reads it again (`world-chrome-context`). A
+  // look that cannot be read costs nothing: the base pack applies and every
+  // action still works (FR-018).
+  const packId =
+    useWorldChrome(worldId, "interfacePackId", readInterfacePack) ?? null;
+  const remember = useRememberWorldChrome();
+  const [revision, setRevision] = useState(0);
 
   useEffect(() => {
     const stop = startAppearanceEventSync(
       {
         onAppearanceChanged: (id) => {
-          setPackId(id);
+          remember(worldId, { interfacePackId: id });
           // Bumped even when the id is unchanged: a pack can be corrected or
           // reinstalled in place, and "the same id" is not "the same pack".
           setRevision((n) => n + 1);
@@ -60,7 +59,7 @@ export function WorldAppearance({ worldId, children }: WorldAppearanceProps) {
       subscribeToWorldEvents(worldId, { announcePause: false }),
     );
     return stop;
-  }, [worldId]);
+  }, [worldId, remember]);
 
   return (
     <AppearanceProvider interfacePackId={packId} revision={revision}>

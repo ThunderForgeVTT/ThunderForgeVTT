@@ -1,9 +1,10 @@
-import { useEffect, useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { getResumeSceneName } from "@/api/worldStatistics";
 import { Button } from "@/components/ui/button/Button";
 import { WorldAppearance } from "@/appearance/WorldAppearance";
 import { PlayPausedBanner } from "@/components/world/PlayPausedBanner";
+import { useWorldChrome } from "@/hooks/world-chrome-context";
 import { WorldSidebarNav } from "@/layouts/world-layout/WorldSidebarNav";
 
 export interface WorldSectionShellProps {
@@ -22,8 +23,9 @@ export interface WorldSectionShellProps {
  * exactly one, in the same place.
  *
  * Play names the scene it resumes in (spec 100 US3.4) on every page here,
- * not only the overview: the shell asks once per world, and says "Play"
- * until it knows, or when no scene is active.
+ * not only the overview. The name is shared app state (`useWorldChrome`), so
+ * moving between pages shows the last one at once while it is refreshed; it
+ * says "Play" before the first answer, or when no scene is active.
  *
  * Width and gutter match `Container` (spec 100 US4): `--page-max` caps the
  * page on ultrawide screens, `w-full` lets it shrink freely below that. Play's own full-screen canvas is unrelated
@@ -34,24 +36,7 @@ export function WorldSectionShell({
   isGm,
   children,
 }: WorldSectionShellProps) {
-  const [resume, setResume] = useState<{
-    worldId: string;
-    scene: string | null;
-  } | null>(null);
-  useEffect(() => {
-    let active = true;
-    getResumeSceneName(worldId)
-      .then((scene) => {
-        if (active) setResume({ worldId, scene });
-      })
-      .catch(() => {
-        // Play still works; it just does not name the scene.
-      });
-    return () => {
-      active = false;
-    };
-  }, [worldId]);
-  const scene = resume?.worldId === worldId ? resume.scene : null;
+  const scene = useWorldChrome(worldId, "resumeScene", getResumeSceneName);
 
   return (
     <WorldAppearance worldId={worldId}>

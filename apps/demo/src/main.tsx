@@ -7,6 +7,7 @@ import { HelmetProvider } from "react-helmet-async";
 import { BrowserRouter } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { ThemeProvider } from "@/hooks/useTheme";
+import { WorldChromeProvider } from "@/hooks/WorldChromeProvider";
 import { DemoApp } from "./DemoApp";
 import "./demo.css";
 import { bootDemoTelemetry } from "./telemetry";
@@ -22,9 +23,11 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <HelmetProvider>
     <ThemeProvider>
       <AuthProvider>
-        <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <DemoApp />
-        </BrowserRouter>
+        <WorldChromeProvider>
+          <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+            <DemoApp />
+          </BrowserRouter>
+        </WorldChromeProvider>
       </AuthProvider>
     </ThemeProvider>
   </HelmetProvider>,
