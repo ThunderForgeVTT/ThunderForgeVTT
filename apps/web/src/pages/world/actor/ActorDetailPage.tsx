@@ -219,10 +219,10 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
               This actor doesn't exist or you don't have access to it.
             </p>
             <Link
-              to={`/world/${worldId}/staging`}
+              to={`/world/${worldId}`}
               className="text-primary hover:underline"
             >
-              Back to staging
+              Back to the world
             </Link>
           </Card>
         </main>
@@ -452,9 +452,7 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
           className="justify-self-start"
           onClick={() =>
             navigate(
-              fromPlayers
-                ? `/world/${worldId}/players`
-                : `/world/${worldId}/staging`,
+              fromPlayers ? `/world/${worldId}/players` : `/world/${worldId}`,
             )
           }
           data-testid="actor-back"

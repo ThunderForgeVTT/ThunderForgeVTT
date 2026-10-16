@@ -205,8 +205,8 @@ export default function CreateWorldPage() {
       // Spec 010: straight to staging (not the canvas, and not the
       // dashboard) — the world now always has a default scene already
       // rendered (FR-004, FR-006), via create_world's atomic transaction
-      // (T005), and staging is the new first stop before "Play".
-      void navigate(`/world/${world.id}/staging`);
+      // (T005), and the overview is the first stop before "Play" (spec 100).
+      void navigate(`/world/${world.id}`);
     } catch (error) {
       // FR-011: input stays exactly as the user left it — this catch
       // never clears `name`/`description`, only surfaces the error.
@@ -393,7 +393,7 @@ export default function CreateWorldPage() {
                   it from Scenes.
                 </p>
                 <Link
-                  to={`/world/${madeWithoutMap}/staging`}
+                  to={`/world/${madeWithoutMap}`}
                   className="font-medium underline underline-offset-2"
                 >
                   Continue to the world

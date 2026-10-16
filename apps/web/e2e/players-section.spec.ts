@@ -18,8 +18,8 @@ async function registerAndCreateWorld(
   await page.goto("/worlds/create");
   await page.locator("#world-name").fill(worldName);
   await page.getByRole("button", { name: /create world/i }).click();
-  await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
-  const match = /\/world\/([^/]+)\/staging$/.exec(new URL(page.url()).pathname);
+  await page.waitForURL(/\/world\/[^/]+$/, { timeout: 15_000 });
+  const match = /\/world\/([^/]+)$/.exec(new URL(page.url()).pathname);
   if (!match) {
     throw new Error(`Could not extract world id from URL: ${page.url()}`);
   }
@@ -99,7 +99,7 @@ test("US1: every member sees the roster paired with claimed characters, and Over
   // the nav entry that leads there: the old overview list's testid exists
   // nowhere, so asserting its absence passed against a blank page
   // (docs/test-audit-2026-09-02.md).
-  await gmPage.goto(`/world/${worldId}/staging`);
+  await gmPage.goto(`/world/${worldId}`);
   await expect(gmPage.getByTestId("world-nav-players")).toBeVisible();
 
   // First member joins and claims the character.

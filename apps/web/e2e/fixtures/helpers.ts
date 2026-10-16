@@ -217,8 +217,8 @@ export async function registerAndCreateWorld(
   await page.waitForURL(/\/worlds\/create$/, { timeout: 15_000 });
   await page.locator("#world-name").fill(worldName);
   await page.getByRole("button", { name: /create world/i }).click();
-  await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
-  const match = /\/world\/([^/]+)\/staging$/.exec(new URL(page.url()).pathname);
+  await page.waitForURL(/\/world\/[^/]+$/, { timeout: 15_000 });
+  const match = /\/world\/([^/]+)$/.exec(new URL(page.url()).pathname);
   if (!match) {
     throw new Error(`Could not extract world id from URL: ${page.url()}`);
   }
@@ -357,6 +357,53 @@ export async function ensureSidebarOpen(page: Page): Promise<void> {
 export async function clickPlay(page: Page): Promise<void> {
   await page.getByTestId("play-button").click();
   await page.waitForURL(/\/world\/[^/]+\/play$/, { timeout: 15_000 });
+}
+
+/**
+ * Gives a joined player a character of their own, so the world's overview
+ * lets them in: it sends a player without one to Actor Selection (spec 017
+ * FR-001, spec 100 US2.5). The Game Master allows player-made characters
+ * and the player makes one, both through the server — a test using this is
+ * about what the player sees once seated, not how they got the character.
+ */
+export async function seatPlayer(
+  gmPage: Page,
+  playerPage: Page,
+  worldId: string,
+  name = "Wren",
+): Promise<void> {
+  const allowed = await graphql<{ errors?: { message: string }[] }>(
+    gmPage,
+    `
+      mutation ($input: UpdateWorldAllowPlayerCreatedActorsInput!) {
+        updateWorldAllowPlayerCreatedActors(input: $input) {
+          id
+        }
+      }
+    `,
+    { input: { worldId, allow: true } },
+  );
+  if (allowed.errors) {
+    throw new Error(
+      `Could not allow player characters: ${JSON.stringify(allowed.errors)}`,
+    );
+  }
+  const claimed = await graphql<{ errors?: { message: string }[] }>(
+    playerPage,
+    `
+      mutation ($worldId: UUID!, $name: String!) {
+        createAndClaimActor(worldId: $worldId, name: $name) {
+          actorId
+        }
+      }
+    `,
+    { worldId, name },
+  );
+  if (claimed.errors) {
+    throw new Error(
+      `Could not make a character: ${JSON.stringify(claimed.errors)}`,
+    );
+  }
 }
 
 /**

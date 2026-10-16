@@ -263,7 +263,7 @@ async function addTokens(
   // which lands here as "execution context was destroyed" and loses the run.
   // It would also fold the cost of arrival into a figure meant to describe
   // steady state, which is the thing this file is at pains not to do.
-  await page.goto(`/world/${worldId}/staging`);
+  await page.goto(`/world/${worldId}`);
 
   // The grid is laid out for the level being built, not for the chunk, so a
   // board grown in pieces occupies the same space as one created at once.

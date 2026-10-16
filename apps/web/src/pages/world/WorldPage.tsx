@@ -182,8 +182,8 @@ export default function WorldPage() {
   // (research.md §3). Wall authoring tools (FR-009) are hidden entirely
   // for non-GMs, never merely disabled.
   const { isGm: isSceneOwner } = useWorldRole(id, world);
-  // Spec 010: staging now happens earlier, at its own `/world/:id/staging`
-  // route (`WorldStagingRoutePage.tsx`) — landing here means staging is
+  // Spec 010: staging happens before this page, on the world's overview
+  // (`/world/:id`, spec 100) — landing here means staging is
   // already done, so this page always renders the full-screen canvas
   // directly. `playView` itself is kept (rather than removed outright) so
   // the canvas-visibility effect below — which spec 009's research.md §1

@@ -48,10 +48,8 @@ test("a player receives the map and grid of the scene their world is playing", a
     .locator("#world-name")
     .fill(`E2E Active Scene ${uniqueSuffix()}`);
   await gmPage.getByRole("button", { name: /create world/i }).click();
-  await gmPage.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 20_000 });
-  const worldId = /\/world\/([^/]+)\/staging$/.exec(
-    new URL(gmPage.url()).pathname,
-  )![1];
+  await gmPage.waitForURL(/\/world\/[^/]+$/, { timeout: 20_000 });
+  const worldId = /\/world\/([^/]+)$/.exec(new URL(gmPage.url()).pathname)![1];
 
   const playerPage = await inviteAndJoinAsPlayer(
     browser,

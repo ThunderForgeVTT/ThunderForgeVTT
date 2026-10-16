@@ -89,10 +89,8 @@ async function createWorldNamed(page: Page, name: string): Promise<string> {
   await page.goto("/worlds/create");
   await page.locator("#world-name").fill(name);
   await page.getByRole("button", { name: /create world/i }).click();
-  await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
-  const worldId = /\/world\/([^/]+)\/staging$/.exec(
-    new URL(page.url()).pathname,
-  )?.[1];
+  await page.waitForURL(/\/world\/[^/]+$/, { timeout: 15_000 });
+  const worldId = /\/world\/([^/]+)$/.exec(new URL(page.url()).pathname)?.[1];
   if (!worldId) {
     throw new Error(`Could not extract world id from URL: ${page.url()}`);
   }

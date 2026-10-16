@@ -123,8 +123,8 @@ async function openCreateForm(page: Page, name: string): Promise<void> {
 
 async function create(page: Page): Promise<string> {
   await page.getByRole("button", { name: /create world/i }).click();
-  await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 30_000 });
-  const match = /\/world\/([^/]+)\/staging$/.exec(new URL(page.url()).pathname);
+  await page.waitForURL(/\/world\/[^/]+$/, { timeout: 30_000 });
+  const match = /\/world\/([^/]+)$/.exec(new URL(page.url()).pathname);
   if (!match) throw new Error(`no world id in ${page.url()}`);
   return match[1];
 }

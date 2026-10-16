@@ -53,8 +53,8 @@ async function registerAndCreateWorld(
   await page.waitForURL(/\/worlds\/create$/, { timeout: 15_000 });
   await page.locator("#world-name").fill(worldName);
   await page.getByRole("button", { name: /create world/i }).click();
-  await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
-  const match = /\/world\/([^/]+)\/staging$/.exec(new URL(page.url()).pathname);
+  await page.waitForURL(/\/world\/[^/]+$/, { timeout: 15_000 });
+  const match = /\/world\/([^/]+)$/.exec(new URL(page.url()).pathname);
   if (!match) {
     throw new Error(`Could not extract world id from URL: ${page.url()}`);
   }
@@ -112,9 +112,14 @@ test.describe("Spec 018 Scenario 1: the Manifestation roll exercises keep/drop +
     // confirming" flow this test is about is then walked in the UI, for Genie.
     const moved = await graphql<{ errors?: unknown[] }>(
       page,
-      `mutation U($input: UpdateWorldGameSystemInput!) {
-        updateWorldGameSystem(input: $input) { id gameSystemId }
-      }`,
+      `
+        mutation U($input: UpdateWorldGameSystemInput!) {
+          updateWorldGameSystem(input: $input) {
+            id
+            gameSystemId
+          }
+        }
+      `,
       { input: { worldId, gameSystemId: "dnd5e" } },
     );
     expect(moved.errors, "an empty world moves to 5E unasked").toBeUndefined();
@@ -172,7 +177,7 @@ test.describe("Spec 018 Scenario 1: the Manifestation roll exercises keep/drop +
       { timeout: 15_000 },
     );
 
-    await page.goto(`/world/${worldId}/staging`);
+    await page.goto(`/world/${worldId}`);
     await page.getByTestId("play-button").click();
     await page.waitForURL(new RegExp(`/world/${worldId}/play$`), {
       timeout: 15_000,

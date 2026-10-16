@@ -109,7 +109,7 @@ async function openCombatSection(page: Page): Promise<void> {
 
 /** The Game Master's way in: the staging page's Play button. */
 async function gmOpensCombatPanel(page: Page, worldId: string): Promise<void> {
-  await page.goto(`/world/${worldId}/staging`);
+  await page.goto(`/world/${worldId}`);
   await clickPlay(page);
   await openCombatSection(page);
 }
@@ -531,10 +531,8 @@ test.describe("Spec 031: the shared initiative tracker", () => {
       .locator("#world-name")
       .fill(`E2E Combat Two Windows ${uniqueSuffix()}`);
     await page.getByRole("button", { name: /create world/i }).click();
-    await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
-    const worldId = /\/world\/([^/]+)\/staging$/.exec(
-      new URL(page.url()).pathname,
-    )![1];
+    await page.waitForURL(/\/world\/[^/]+$/, { timeout: 15_000 });
+    const worldId = /\/world\/([^/]+)$/.exec(new URL(page.url()).pathname)![1];
 
     const vanguard = await createNpc(page, worldId, "Vanguard");
     const rival = await createNpc(page, worldId, "Rival");

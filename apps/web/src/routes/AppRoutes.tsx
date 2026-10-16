@@ -23,7 +23,7 @@ const SetupCallbackPage = lazy(pageLoaders.setupCallback);
 const WelcomePage = lazy(pageLoaders.welcome);
 const WorldListPage = lazy(pageLoaders.worldList);
 const CreateWorldPage = lazy(pageLoaders.createWorld);
-const WorldDashboardPage = lazy(pageLoaders.worldDashboard);
+const WorldOverviewPage = lazy(pageLoaders.worldOverview);
 const WorldPage = lazy(pageLoaders.worldWorkspace);
 const WorldStagingRoutePage = lazy(pageLoaders.worldStaging);
 const WorldCompendiumRoutePage = lazy(pageLoaders.worldCompendium);
@@ -612,10 +612,7 @@ export default function AppRoutes({
           path="/world/:id"
           element={
             <RequireAuthenticated>
-              {renderLazyPage(
-                <WorldDashboardPage />,
-                "Loading world dashboard",
-              )}
+              {renderLazyPage(<WorldOverviewPage />, "Loading the world")}
             </RequireAuthenticated>
           }
         />
@@ -631,14 +628,12 @@ export default function AppRoutes({
             </RequireAuthenticated>
           }
         />
+        {/* Spec 100 US2: staging is the overview now; the old address redirects. */}
         <Route
           path="/world/:id/staging"
           element={
             <RequireAuthenticated>
-              {renderLazyPage(
-                <WorldStagingRoutePage />,
-                "Loading world staging",
-              )}
+              {renderLazyPage(<WorldStagingRoutePage />, "Loading the world")}
             </RequireAuthenticated>
           }
         />

@@ -54,10 +54,8 @@ async function createWorldWithItem(
   await page.goto("/worlds/create");
   await page.locator("#world-name").fill(`E2E DMCA Takedown ${uniqueSuffix()}`);
   await page.getByRole("button", { name: /create world/i }).click();
-  await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
-  const worldMatch = /\/world\/([^/]+)\/staging$/.exec(
-    new URL(page.url()).pathname,
-  );
+  await page.waitForURL(/\/world\/[^/]+$/, { timeout: 15_000 });
+  const worldMatch = /\/world\/([^/]+)$/.exec(new URL(page.url()).pathname);
   if (!worldMatch)
     throw new Error(`Could not extract world id from URL: ${page.url()}`);
   const worldId = worldMatch[1];

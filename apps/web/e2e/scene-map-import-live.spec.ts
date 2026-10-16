@@ -95,10 +95,8 @@ test("a map the GM imports from Settings appears on every player's board without
   await gmPage.goto("/worlds/create");
   await gmPage.locator("#world-name").fill(`E2E Map Sync ${uniqueSuffix()}`);
   await gmPage.getByRole("button", { name: /create world/i }).click();
-  await gmPage.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 20_000 });
-  const worldId = /\/world\/([^/]+)\/staging$/.exec(
-    new URL(gmPage.url()).pathname,
-  )![1];
+  await gmPage.waitForURL(/\/world\/[^/]+$/, { timeout: 20_000 });
+  const worldId = /\/world\/([^/]+)$/.exec(new URL(gmPage.url()).pathname)![1];
   const [sceneId] = await sceneIds(gmPage, worldId);
   expect(sceneId, "a new world has its Starting Scene").toBeTruthy();
 

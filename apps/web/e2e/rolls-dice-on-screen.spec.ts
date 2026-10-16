@@ -251,7 +251,7 @@ test.describe("Dice on the screen", () => {
       throw new Error(JSON.stringify(sheet.errors ?? sheet));
     }
 
-    await page.goto(`/world/${worldId}/staging`);
+    await page.goto(`/world/${worldId}`);
     await clickPlay(page);
     await waitForPlayView(page);
 

@@ -1,4 +1,5 @@
 import { postGraphQL } from "@/api/graphqlClient";
+import type { MapCredit } from "@/types/scene";
 
 /** The encounter in progress, as the dashboard reads it. */
 export interface ActiveEncounterSummary {
@@ -48,23 +49,30 @@ export function getWorldStatistics(worldId: string): Promise<WorldStatistics> {
   ).then((data) => data.worldStatistics);
 }
 
-/** Just enough of a scene to list it by name and recency. */
+/** Just enough of a scene to show it as a card: name, recency and picture. */
 export interface SceneHeadline {
   sceneId: string;
   name: string;
   updatedAt: string;
   hidden: boolean;
+  /** Spec 100 US3: the card's picture, `previewUrl` first. */
+  previewUrl: string | null;
+  backgroundUrl: string | null;
+  /** Spec 088 FR-030: a base map is credited wherever it is shown. */
+  backgroundCredit?: MapCredit | null;
 }
 
 /**
- * The world's scenes, by name and when each last changed — nothing else.
+ * The world's scenes, by name, when each last changed and its picture —
+ * nothing else.
  *
  * The same `scenes(worldId)` field the scene switcher reads, with the same
- * hidden-scene rule, asked for four fields instead of twenty. The switcher
- * needs each scene's summary HTML, background URL and preview URL; a list
- * of the five most recently touched scenes needs none of them, and a
- * five-year campaign's forty summaries are exactly the weight the owner
- * asked this page to stop carrying.
+ * hidden-scene rule, asked for a handful of fields instead of twenty. The
+ * switcher needs each scene's summary HTML; the overview's scene cards
+ * (spec 100 US3) need only a name and a picture, and a five-year
+ * campaign's forty summaries are exactly the weight the owner asked this
+ * page to stop carrying. The picture URLs are strings; the images
+ * themselves load only for the few cards drawn.
  */
 export function getSceneHeadlines(worldId: string): Promise<SceneHeadline[]> {
   return postGraphQL<{ scenes: SceneHeadline[] }>(
@@ -75,6 +83,9 @@ export function getSceneHeadlines(worldId: string): Promise<SceneHeadline[]> {
           name
           updatedAt
           hidden
+          previewUrl
+          backgroundUrl
+          backgroundCredit { author licence licenceUrl source catalog shareAlike }
         }
       }
     `,

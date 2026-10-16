@@ -143,7 +143,7 @@ test("a Game Master turns a declared setting off and a player's open sheet follo
 
   // A player reads it and cannot change it — on the Overview, under "About
   // this table"; the settings page shows a Player a GIF, not the settings.
-  await player.goto(`/world/${worldId}/staging`);
+  await player.goto(`/world/${worldId}`);
   const playerToggle = player
     .getByTestId("about-this-table")
     .getByTestId("world-system-setting-inspiration");

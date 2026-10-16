@@ -5,23 +5,23 @@
 ## Phase 1: The landing opens the table (US1)
 
 - [x] T001 [US1] `DEMO` points at the demo world's `/play`.
-- [ ] T002 [US1] Landing e2e: demo links' `href` and the board behind
+- [x] T002 [US1] Landing e2e: demo links' `href` and the board behind
   them (SC-001).
 
 ## Phase 2: One front door (US2)
 
-- [ ] T003 [US2] `WorldOverviewPage` at `/world/:id` from the two pages'
+- [x] T003 [US2] `WorldOverviewPage` at `/world/:id` from the two pages'
   parts; remove "Quick actions", the ids and "Enter world".
-- [ ] T004 [US2] `/staging` redirects; move every staging link; delete
+- [x] T004 [US2] `/staging` redirects; move every staging link; delete
   `WorldDashboardPage` and `WorldStagingPage`.
-- [ ] T005 [US2] e2e: two clicks to the table, the redirect, and the
+- [x] T005 [US2] e2e: two clicks to the table, the redirect, and the
   actor-claim gate (SC-002, SC-003). Update the demo's route headings.
 
 ## Phase 3: The overview gets the session ready (US3)
 
-- [ ] T006 [US3] `SceneStrip` with "Play here" and map credits.
-- [ ] T007 [US3] `PartyStrip`, the notes beside it, "Resume in …".
-- [ ] T008 [US3] Empty states, and e2e for "Play here" (SC-004).
+- [x] T006 [US3] `SceneStrip` with "Play here" and map credits.
+- [x] T007 [US3] `PartyStrip`, the notes beside it, "Resume in …".
+- [x] T008 [US3] Empty states, and e2e for "Play here" (SC-004).
 
 ## Phase 4: Width (US4)
 

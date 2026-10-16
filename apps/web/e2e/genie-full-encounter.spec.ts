@@ -92,7 +92,7 @@ test.describe("Spec 018 Scenario 7: a full combat encounter using only Genie con
     await expect(boundCheckbox).not.toBeChecked({ timeout: 10_000 });
 
     // --- Scenario 1 leg: a Manifestation roll ---
-    await page.goto(`/world/${worldId}/staging`);
+    await page.goto(`/world/${worldId}`);
     await clickPlay(page);
     await waitForEngineReady(page);
 

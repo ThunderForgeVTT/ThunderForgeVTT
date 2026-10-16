@@ -19,8 +19,8 @@ async function registerAndCreateWorldOnDashboard(
   await page.goto("/worlds/create");
   await page.locator("#world-name").fill(worldName);
   await page.getByRole("button", { name: /create world/i }).click();
-  await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
-  const match = /\/world\/([^/]+)\/staging$/.exec(new URL(page.url()).pathname);
+  await page.waitForURL(/\/world\/[^/]+$/, { timeout: 15_000 });
+  const match = /\/world\/([^/]+)$/.exec(new URL(page.url()).pathname);
   if (!match)
     throw new Error(`Could not extract world id from URL: ${page.url()}`);
   const worldId = match[1];
@@ -130,7 +130,7 @@ test.describe("Spec 019: Session Resource trading between two real players", () 
     });
 
     // Start the session and propose from the GM staging page.
-    await gmPage.goto(`/world/${worldId}/staging`);
+    await gmPage.goto(`/world/${worldId}`);
     const gmPanel = gmPage.getByTestId("genie-session-panel-wrapper");
     await expect(gmPanel).toBeVisible({ timeout: 15_000 });
     const startButton = gmPage.getByTestId("start-genie-session-button");
@@ -171,7 +171,7 @@ test.describe("Spec 019: Session Resource trading between two real players", () 
     ).toBe(true);
 
     // And confirm the real UI, as the recipient, renders it.
-    await playerPage.goto(`/world/${worldId}/staging`);
+    await playerPage.goto(`/world/${worldId}`);
     await expect(playerPage.getByTestId("genie-session-panel")).toBeVisible({
       timeout: 15_000,
     });
@@ -311,7 +311,7 @@ test.describe("Spec 019 T012: two clients connected at once, each seeing the oth
 
     // The GM opens the session first, so the player's page below has something
     // to subscribe to when it mounts.
-    await gmPage.goto(`/world/${worldId}/staging`);
+    await gmPage.goto(`/world/${worldId}`);
     await expect(gmPage.getByTestId("genie-session-panel-wrapper")).toBeVisible(
       {
         timeout: 15_000,
@@ -327,7 +327,7 @@ test.describe("Spec 019 T012: two clients connected at once, each seeing the oth
 
     // **The recipient settles here and does not move again.** Every assertion
     // after this point is about something arriving on a page nobody touched.
-    await playerPage.goto(`/world/${worldId}/staging`);
+    await playerPage.goto(`/world/${worldId}`);
     await expect(playerPage.getByTestId("genie-session-panel")).toBeVisible({
       timeout: 15_000,
     });

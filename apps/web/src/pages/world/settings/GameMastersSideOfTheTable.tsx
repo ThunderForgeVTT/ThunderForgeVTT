@@ -57,7 +57,7 @@ export function GameMastersSideOfTheTable({
           world&apos;s Overview.
         </p>
         <Button asChild icon="arrow-left" data-testid="settings-back-to-world">
-          <Link to={`/world/${worldId}/staging`}>Back to the world</Link>
+          <Link to={`/world/${worldId}`}>Back to the world</Link>
         </Button>
       </Card>
     </Container>

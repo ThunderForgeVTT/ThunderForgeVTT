@@ -303,7 +303,7 @@ async function expectMembersToldThatAndWhen(
   await expect(gmPage.locator("body")).not.toContainText(grounds);
 
   // The world page a member lands on: a quiet banner.
-  await gmPage.goto(`/world/${worldId}/staging`);
+  await gmPage.goto(`/world/${worldId}`);
   const banner = gmPage.getByTestId("world-play-paused-banner");
   await expect(banner).toContainText(
     /Play in this world has been paused by an operator since \S/,

@@ -76,10 +76,8 @@ async function seatATable(
     await gmPage.waitForURL(/\/worlds\/create$/, { timeout: 15_000 });
     await gmPage.locator("#world-name").fill(worldName);
     await gmPage.getByRole("button", { name: /create world/i }).click();
-    await gmPage.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
-    worldId = /\/world\/([^/]+)\/staging$/.exec(
-      new URL(gmPage.url()).pathname,
-    )![1];
+    await gmPage.waitForURL(/\/world\/[^/]+$/, { timeout: 15_000 });
+    worldId = /\/world\/([^/]+)$/.exec(new URL(gmPage.url()).pathname)![1];
   });
 
   let joinLink = "";
@@ -118,10 +116,8 @@ async function seatATable(
   if (play) {
     await test.step("both press Play", async () => {
       for (const page of [gmPage, playerPage]) {
-        if (!new URL(page.url()).pathname.endsWith("/staging")) {
+        if (!new URL(page.url()).pathname.endsWith(`/world/${worldId}`)) {
           await page.goto(`/world/${worldId}`);
-          await page.getByRole("link", { name: "Enter world" }).click();
-          await page.waitForURL(/\/staging$/, { timeout: 15_000 });
         }
         await page.getByTestId("play-button").click();
         await page.waitForURL(new RegExp(`/world/${worldId}/play$`), {

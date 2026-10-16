@@ -170,8 +170,8 @@ test.describe("The account's library (spec 049 US3, spec 050 US1)", () => {
     await page.goto("/worlds/create");
     await page.locator("#world-name").fill("The Second Table");
     await page.getByRole("button", { name: /create world/i }).click();
-    await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 30_000 });
-    const secondWorld = /\/world\/([^/]+)\/staging$/.exec(
+    await page.waitForURL(/\/world\/[^/]+$/, { timeout: 30_000 });
+    const secondWorld = /\/world\/([^/]+)$/.exec(
       new URL(page.url()).pathname,
     )?.[1];
     expect(secondWorld).not.toBe(firstWorld);

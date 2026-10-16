@@ -152,9 +152,7 @@ export default function WelcomePage() {
                     {world.description ?? "Jump back into this world."}
                   </p>
                   <Button asChild icon="worlds">
-                    <Link to={`/world/${world.id}/staging`}>
-                      Enter {world.name}
-                    </Link>
+                    <Link to={`/world/${world.id}`}>Enter {world.name}</Link>
                   </Button>
                 </Card>
               ))}

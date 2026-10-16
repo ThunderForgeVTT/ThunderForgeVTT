@@ -76,12 +76,15 @@ the sidebar shell, with Play as its first action.
    The sidebar's "Overview" links there.
 2. `/world/:id/staging` redirects to `/world/:id`, replacing the history
    entry, so old links and bookmarks keep working.
-3. Every in-app link to staging or to "Enter world" goes to `/world/:id`;
-   no page offers "Enter world" any more.
+3. Every in-app link to staging goes to `/world/:id`. The overview offers
+   no "Enter world": the worlds list keeps its "Enter world", and it opens
+   the overview.
 4. From the worlds list, a Game Master reaches the table in two clicks:
    the world, then Play.
 5. A player who has not claimed a character still goes through
-   `/world/:id/actor-select` when they press Play (spec 017 is unchanged).
+   `/world/:id/actor-select` (spec 017): the overview keeps the old hub's
+   claim gate, so opening the world sends them there. `/play` itself does
+   not gate.
 6. The overview keeps everything the two pages held that a member uses:
    last session notes, the invite link, the system's `world-staging`
    panel slot, the play-paused banner, and, for a Game Master, the

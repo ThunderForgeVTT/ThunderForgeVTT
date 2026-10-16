@@ -63,7 +63,7 @@ export async function registerAndCreateWorld(
   // Spec 010: CreateWorldPage navigates to /world/{id}/staging (not the
   // canvas directly, and not the dashboard) — click "Play" to reach the
   // full-screen canvas at /world/{id}/play.
-  await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
+  await page.waitForURL(/\/world\/[^/]+$/, { timeout: 15_000 });
   await page.getByTestId("play-button").click();
   await page.waitForURL(/\/world\/[^/]+\/play$/, { timeout: 15_000 });
 }

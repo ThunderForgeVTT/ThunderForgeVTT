@@ -119,10 +119,8 @@ test("two players reaching for one placed item produce exactly one inventory ent
   await gmPage.goto("/worlds/create");
   await gmPage.locator("#world-name").fill(`E2E Pickup Race ${uniqueSuffix()}`);
   await gmPage.getByRole("button", { name: /create world/i }).click();
-  await gmPage.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 20_000 });
-  const worldId = /\/world\/([^/]+)\/staging$/.exec(
-    new URL(gmPage.url()).pathname,
-  )![1];
+  await gmPage.waitForURL(/\/world\/[^/]+$/, { timeout: 20_000 });
+  const worldId = /\/world\/([^/]+)$/.exec(new URL(gmPage.url()).pathname)![1];
 
   const world = await gql<{ world: { activeSceneId: string | null } }>(
     gmPage,

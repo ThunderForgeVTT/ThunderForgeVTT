@@ -215,7 +215,7 @@ test.describe("The demo: from an empty browser to a table with two people at it"
       worldId = await registerAndCreateWorld(page, `Demo World ${suffix}`);
       // Registration ends on world creation and world creation ends on
       // staging: at no point is a new user left on a page with nothing on it.
-      expect(new URL(page.url()).pathname).toMatch(/\/world\/[^/]+\/staging$/);
+      expect(new URL(page.url()).pathname).toMatch(/\/world\/[^/]+$/);
     });
 
     await test.step("picks the ruleset the table plays", async () => {

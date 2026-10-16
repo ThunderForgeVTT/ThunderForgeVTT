@@ -64,9 +64,13 @@ test.describe("Spec 020 User Story 2: NPC shop sells items for Session Resources
     // players until its Game Master shows it (owner decision 2026-09-15).
     await graphql(
       gmPage,
-      `mutation ($actorId: UUID!) {
-        setActorVisibleToPlayers(actorId: $actorId, visible: true) { id }
-      }`,
+      `
+        mutation ($actorId: UUID!) {
+          setActorVisibleToPlayers(actorId: $actorId, visible: true) {
+            id
+          }
+        }
+      `,
       { actorId: npcId },
     );
 
@@ -196,7 +200,7 @@ test.describe("Spec 020 User Story 2: NPC shop sells items for Session Resources
       `,
       { input: { actorId: playerActorId, itemId: flaskId, quantity: 1 } },
     );
-    await gmPage.goto(`/world/${worldId}/staging`);
+    await gmPage.goto(`/world/${worldId}`);
     await expect(gmPage.getByTestId("genie-session-panel-wrapper")).toBeVisible(
       { timeout: 15_000 },
     );
@@ -391,9 +395,13 @@ test.describe("Spec 020 User Story 2: NPC shop sells items for Session Resources
     // about an NPC the player cannot reach.
     await graphql(
       gmPage,
-      `mutation ($actorId: UUID!) {
-        setActorVisibleToPlayers(actorId: $actorId, visible: true) { id }
-      }`,
+      `
+        mutation ($actorId: UUID!) {
+          setActorVisibleToPlayers(actorId: $actorId, visible: true) {
+            id
+          }
+        }
+      `,
       { actorId: plainNpc.data.createActor.id },
     );
     await playerPage.goto(

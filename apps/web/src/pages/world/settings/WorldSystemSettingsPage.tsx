@@ -362,7 +362,7 @@ export default function WorldSystemSettingsPage() {
               size="sm"
               icon="arrow-left"
               className="justify-self-start"
-              onClick={() => navigate(`/world/${worldId}/staging`)}
+              onClick={() => navigate(`/world/${worldId}`)}
             >
               Back to Overview
             </Button>

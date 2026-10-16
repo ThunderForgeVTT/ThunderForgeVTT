@@ -1,17 +1,10 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import {
-  getSceneHeadlines,
   getWorldStatistics,
-  type SceneHeadline,
   type WorldStatistics,
 } from "@/api/worldStatistics";
-import { Card } from "@/components/ui/card/Card";
 import { FantasyIcon } from "@/components/ui/fantasy-icon/FantasyIcon";
 import type { FantasyIconName } from "@/components/ui/fantasy-icon/FantasyIcon";
-
-/** How many recently touched scenes the dashboard names. */
-export const RECENT_SCENE_COUNT = 5;
 
 interface Figure {
   key: string;
@@ -22,15 +15,15 @@ interface Figure {
 }
 
 /**
- * A world by its figures, and the few scenes most recently worked on.
+ * A world by its figures.
  *
  * # Why figures and not the scene list
  *
  * The owner: "imagine 40 scenes we've been running for five years. Showing
  * all the scenes would be chaotic. Actual statistics for the GM would be
  * really good." The dashboard used to render every scene as a bullet. Now it
- * leads with numbers — how big the world is, who is at the table — and names
- * only the handful of scenes someone touched last, with a link to the rest.
+ * leads with numbers — how big the world is, who is at the table — and the
+ * overview's scene strip names only the handful of scenes touched last.
  *
  * # Figures are the viewer's, and a player gets fewer
  *
@@ -51,10 +44,6 @@ export function WorldAtAGlance({ worldId }: { worldId: string }) {
     value: WorldStatistics | null;
     failed: boolean;
   } | null>(null);
-  const [scenes, setScenes] = useState<{
-    worldId: string;
-    value: SceneHeadline[];
-  } | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -65,13 +54,6 @@ export function WorldAtAGlance({ worldId }: { worldId: string }) {
       .catch(() => {
         if (active) setStats({ worldId, value: null, failed: true });
       });
-    getSceneHeadlines(worldId)
-      .then((value) => {
-        if (active) setScenes({ worldId, value });
-      })
-      .catch(() => {
-        if (active) setScenes({ worldId, value: [] });
-      });
     return () => {
       active = false;
     };
@@ -79,8 +61,6 @@ export function WorldAtAGlance({ worldId }: { worldId: string }) {
 
   const current = stats && stats.worldId === worldId ? stats : null;
   const figures = current?.value ? figuresFor(current.value) : null;
-  const headlines = scenes && scenes.worldId === worldId ? scenes.value : null;
-  const recent = headlines ? mostRecentlyUpdated(headlines) : null;
   const encounter = current?.value?.activeEncounter ?? null;
 
   return (
@@ -138,57 +118,6 @@ export function WorldAtAGlance({ worldId }: { worldId: string }) {
           ))}
         </dl>
       )}
-
-      <Card
-        surface="parchment"
-        className="grid gap-3 p-5"
-        data-testid="recent-scenes"
-      >
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-lg font-semibold">Recently updated scenes</h3>
-          <Link
-            to={`/world/${worldId}/scenes`}
-            className="text-sm text-primary underline-offset-4 hover:underline"
-            data-testid="recent-scenes-all-link"
-          >
-            {headlines
-              ? `All ${headlines.length} scene${headlines.length === 1 ? "" : "s"}`
-              : "All scenes"}
-          </Link>
-        </div>
-        {recent === null ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
-        ) : recent.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No scenes yet.</p>
-        ) : (
-          <ol className="grid gap-1 text-sm">
-            {recent.map((scene) => (
-              <li
-                key={scene.sceneId}
-                className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 border-b border-border py-1.5 last:border-b-0"
-                data-testid="recent-scene"
-              >
-                <span className="font-medium">
-                  {scene.name}
-                  {scene.hidden ? (
-                    // Only a Game Master is sent hidden scenes, so only a
-                    // Game Master ever sees this.
-                    <span className="ml-2 text-xs text-muted-foreground">
-                      (hidden from players)
-                    </span>
-                  ) : null}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  Updated{" "}
-                  <time dateTime={scene.updatedAt}>
-                    {new Date(scene.updatedAt).toLocaleDateString()}
-                  </time>
-                </span>
-              </li>
-            ))}
-          </ol>
-        )}
-      </Card>
     </section>
   );
 }
@@ -240,14 +169,4 @@ function placeholderFigures(): Figure[] {
     { key: "characters", label: "Characters", value: 0, icon: "quill" },
     { key: "tokens", label: "Tokens", value: 0, icon: "worlds" },
   ];
-}
-
-/** Newest first, the first few. Sorted here rather than trusting the order
- * the scenes query happens to return, which is not a contract. */
-export function mostRecentlyUpdated(
-  scenes: readonly SceneHeadline[],
-): SceneHeadline[] {
-  return [...scenes]
-    .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
-    .slice(0, RECENT_SCENE_COUNT);
 }

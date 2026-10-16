@@ -58,10 +58,8 @@ async function createAnotherWorld(page: Page, name: string): Promise<string> {
   await page.goto("/worlds/create");
   await page.locator("#world-name").fill(name);
   await page.getByRole("button", { name: /create world/i }).click();
-  await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 20_000 });
-  const id = /\/world\/([^/]+)\/staging$/.exec(
-    new URL(page.url()).pathname,
-  )?.[1];
+  await page.waitForURL(/\/world\/[^/]+$/, { timeout: 20_000 });
+  const id = /\/world\/([^/]+)$/.exec(new URL(page.url()).pathname)?.[1];
   expect(id, "the second world should have been created").toBeTruthy();
   return id!;
 }

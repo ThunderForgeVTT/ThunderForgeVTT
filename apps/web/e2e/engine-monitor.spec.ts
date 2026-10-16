@@ -19,7 +19,7 @@ test("the readout is off until asked for, then shows live frames and latency", a
   await page.goto("/worlds/create");
   await page.locator("#world-name").fill(`E2E Monitor ${uniqueSuffix()}`);
   await page.getByRole("button", { name: /create world/i }).click();
-  await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 20_000 });
+  await page.waitForURL(/\/world\/[^/]+$/, { timeout: 20_000 });
   await page.getByTestId("play-button").click({ timeout: 20_000 });
   await page.waitForURL(/\/world\/[^/]+\/play$/, { timeout: 20_000 });
   await expect(page.locator("canvas")).toBeVisible({ timeout: 30_000 });

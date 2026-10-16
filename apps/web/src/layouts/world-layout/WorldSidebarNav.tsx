@@ -55,7 +55,7 @@ export function WorldSidebarNav({ worldId, isGm }: WorldSidebarNavProps) {
     {
       label: "Overview",
       icon: "compass",
-      to: `/world/${worldId}/staging`,
+      to: `/world/${worldId}`,
       testId: "world-nav-overview",
     },
     {

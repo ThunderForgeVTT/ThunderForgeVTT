@@ -8,6 +8,8 @@ import { WorldSidebarNav } from "@/layouts/world-layout/WorldSidebarNav";
 export interface WorldSectionShellProps {
   worldId: string;
   isGm: boolean;
+  /** Spec 100 US3.4: the overview says which scene Play resumes in. */
+  playLabel?: string;
   children: ReactNode;
 }
 
@@ -31,11 +33,15 @@ export interface WorldSectionShellProps {
 export function WorldSectionShell({
   worldId,
   isGm,
+  playLabel = "Play",
   children,
 }: WorldSectionShellProps) {
   return (
     <WorldAppearance worldId={worldId}>
-      <div className="mx-auto grid w-full max-w-[1800px] gap-4 p-4 sm:p-6 lg:p-8">
+      <div
+        className="mx-auto grid w-full max-w-[1800px] gap-4 p-4 sm:p-6 lg:p-8"
+        data-testid="world-section-shell"
+      >
         <div className="flex justify-end">
           <Button
             asChild
@@ -44,7 +50,7 @@ export function WorldSectionShell({
             icon="spark"
             data-testid="play-button"
           >
-            <Link to={`/world/${worldId}/play`}>Play</Link>
+            <Link to={`/world/${worldId}/play`}>{playLabel}</Link>
           </Button>
         </div>
         {/* Spec 051 US5: here rather than on one page, so every hub screen a

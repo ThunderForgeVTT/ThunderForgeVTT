@@ -62,20 +62,11 @@ test("the demo opens on a world's dashboard, with the visitor as its Game Master
   // FR-018: whose maps these are, on the page.
   await expect(page.getByTestId("demo-notice")).toContainText("MBRound18");
   await expect(page.getByTestId("demo-notice")).toContainText("CC BY-SA 4.0");
-  await expect(
-    page
-      .getByRole("link", { name: /enter world/i })
-      .or(page.getByRole("button", { name: /enter world/i }))
-      .first(),
-  ).toBeVisible();
+  // Spec 100 US2: the dashboard is the world's front door, and Play is on it.
+  await expect(page.getByTestId("play-button")).toBeVisible();
 });
 
-test("Enter world leads to a play field with the engine running", async () => {
-  await page
-    .getByRole("link", { name: /enter world/i })
-    .or(page.getByRole("button", { name: /enter world/i }))
-    .first()
-    .click();
+test("Play leads to a play field with the engine running", async () => {
   await page.getByTestId("play-button").click();
   await expect(page).toHaveURL(/\/world\/[^/]+\/play$/);
   await expect(page.locator("canvas")).toBeVisible({ timeout: 60_000 });

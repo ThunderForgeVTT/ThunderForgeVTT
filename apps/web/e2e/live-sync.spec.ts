@@ -64,11 +64,11 @@ async function registerAndCreateWorldOnDashboard(
   await page.goto("/worlds/create");
   await page.locator("#world-name").fill(worldName);
   await page.getByRole("button", { name: /create world/i }).click();
-  await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
+  await page.waitForURL(/\/world\/[^/]+$/, { timeout: 15_000 });
 }
 
 async function enterWorldPlay(page: Page): Promise<void> {
-  await expect(page).toHaveURL(/\/world\/[^/]+\/staging$/);
+  await expect(page).toHaveURL(/\/world\/[^/]+$/);
   await page.getByTestId("play-button").click();
   await page.waitForURL(/\/world\/[^/]+\/play$/, { timeout: 15_000 });
 }

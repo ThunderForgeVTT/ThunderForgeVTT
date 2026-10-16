@@ -338,12 +338,10 @@ test.describe("Client world cache — peer-adjudicated play (US7, Phase 10a)", (
         .locator("#world-name")
         .fill(`E2E Trust Other ${uniqueSuffix()}`);
       await table.gm.getByRole("button", { name: /create world/i }).click();
-      await table.gm.waitForURL(/\/world\/[^/]+\/staging$/, {
+      await table.gm.waitForURL(/\/world\/[^/]+$/, {
         timeout: 20_000,
       });
-      const match = /\/world\/([^/]+)\/staging$/.exec(
-        new URL(table.gm.url()).pathname,
-      );
+      const match = /\/world\/([^/]+)$/.exec(new URL(table.gm.url()).pathname);
       return match![1];
     })();
 

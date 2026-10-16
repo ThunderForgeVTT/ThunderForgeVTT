@@ -27,8 +27,9 @@
   `ActorDetailPage` (×2), `GameMastersSideOfTheTable`,
   `WorldSystemSettingsPage`, `useDockSections` (back from play).
 - `telemetry/routes.ts` keeps `/world/:id/staging`.
-- Play stays where `WorldSectionShell` puts it; the actor-claim gate is
-  untouched.
+- Play stays where `WorldSectionShell` puts it. The overview keeps the
+  hub's actor-claim gate (`useActorClaimGate`), so an unclaimed player
+  opening the world lands on actor-select, as they did on the hub.
 
 ## The overview's sections (US3)
 
