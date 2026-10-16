@@ -355,11 +355,14 @@ test("the sheet works in the play dock, where the player holding the character k
     player.getByTestId(`rfs-skill-${STARTING_SKILL_ID}`),
   ).toBeVisible();
 
-  // The claim made this player an Editor, so the description is a box to
-  // type in rather than text — and what is typed is written when the box is
-  // left, which is checked further down, once the sheet has been closed and
-  // opened again and can only be showing what the server holds.
+  // The claim made this player an Editor. The sheet opens read (spec 102),
+  // and Edit turns the description into a box to type in — what is typed is
+  // written when the box is left, which is checked further down, once the
+  // sheet has been closed and opened again and can only be showing what the
+  // server holds.
   const description = player.locator('textarea[data-testid="rfs-description"]');
+  await expect(description).toHaveCount(0);
+  await player.getByTestId("in-pane-sheet-edit").click();
   await expect(description).toHaveCount(1);
   await description.fill("Has never owned a pair of shoes.");
   await description.blur();
@@ -414,9 +417,10 @@ test("the sheet works in the play dock, where the player holding the character k
 
   // And the description is the character's now, not the closed sheet's: this
   // mount began with nothing typed, so what it shows was read back.
-  await expect(
-    player.locator('textarea[data-testid="rfs-description"]'),
-  ).toHaveValue("Has never owned a pair of shoes.", { timeout: 15_000 });
+  await expect(player.getByTestId("rfs-description")).toHaveText(
+    "Has never owned a pair of shoes.",
+    { timeout: 15_000 },
+  );
 
   await expectNoAxeViolations(player, '[data-testid="rfs-sheet"]');
 });

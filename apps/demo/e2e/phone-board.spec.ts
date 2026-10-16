@@ -130,6 +130,10 @@ test("a player plays from a phone", async ({ browser, baseURL }) => {
           "aria-expanded",
           "true",
         );
+        // Measured where it settles, not partway up its slide in.
+        await sheet.evaluate((el) =>
+          Promise.all(el.getAnimations().map((a) => a.finished)),
+        );
         const box = await sheet.boundingBox();
         expect(box!.height).toBeLessThanOrEqual(PHONE.height * 0.6);
         await expectReachable(page, '[data-testid="board-sheet"] header');
@@ -143,6 +147,52 @@ test("a player plays from a phone", async ({ browser, baseURL }) => {
       await page.getByTestId("phone-row-sheet").click();
       await expect(sheet.getByTestId("in-pane-character-sheet")).toBeVisible();
       await expect(sheet.getByTestId("in-pane-sheet-dismiss")).toHaveCount(0);
+    });
+
+    await test.step("Sheet leads with a hot bar and rolls what it shows", async () => {
+      // The owner's T017 try-out: actions before the scroll, and a sheet
+      // that is read and rolled from, with editing behind a toggle.
+      const hotbar = sheet.getByTestId("in-pane-roll-list");
+      await expect(hotbar).toHaveAttribute("data-layout", "hotbar");
+      const body = sheet.getByTestId("in-pane-sheet-body");
+      await expect(body.getByTestId("dnd5e-actor-sheet")).toBeVisible({
+        timeout: 15_000,
+      });
+      const [barBox, bodyBox] = await Promise.all([
+        hotbar.boundingBox(),
+        body.boundingBox(),
+      ]);
+      expect(barBox!.y + barBox!.height).toBeLessThanOrEqual(bodyBox!.y);
+      await expect(body).toHaveAttribute("data-editing", "false");
+      await expect(body.getByTestId("dnd5e-score-strength-input")).toHaveCount(
+        0,
+      );
+
+      const perception = body.getByTestId("dnd5e-roll-skill-perception");
+      await perception.scrollIntoViewIfNeeded();
+      const tap = await perception.boundingBox();
+      expect(tap!.height, "a skill is thumb-sized").toBeGreaterThanOrEqual(44);
+      await perception.click();
+      const result = sheet.getByTestId("in-pane-roll-result");
+      await expect(result).toBeVisible({ timeout: 15_000 });
+      // The answer is pinned with the hot bar, not left at the top of a
+      // sheet scrolled away from.
+      await expect(result).toBeInViewport();
+
+      await body.getByTestId("dnd5e-roll-save-dexterity").click();
+      await expect(result).toBeVisible({ timeout: 15_000 });
+
+      const edit = sheet.getByTestId("in-pane-sheet-edit");
+      await edit.click();
+      await expect(edit).toHaveAttribute("aria-pressed", "true");
+      await expect(
+        body.getByTestId("dnd5e-score-strength-input"),
+      ).toBeVisible();
+      await expect(perception).toHaveCount(0);
+      await edit.click();
+      await expect(
+        body.getByTestId("dnd5e-roll-skill-perception"),
+      ).toBeVisible();
     });
 
     await test.step("More offers only what a player may use", async () => {

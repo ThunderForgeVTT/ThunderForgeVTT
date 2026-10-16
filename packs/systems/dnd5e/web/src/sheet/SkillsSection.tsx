@@ -5,6 +5,8 @@ import {
   type AbilityId,
 } from "../sheet-regions";
 import { Fact, OptimisticCheckbox } from "./fields";
+import { rollableClass } from "./AbilitiesSection";
+import { d20 } from "../statRolls";
 import { signed, toggleId, type Json } from "./values";
 
 /** Every skill with its bonus, proficiency and expertise, and the passives. */
@@ -16,6 +18,7 @@ export default function SkillsSection({
   skillBonus,
   passivePerception,
   writeProficiencies,
+  onRoll,
 }: {
   canEdit: boolean;
   isPending: boolean;
@@ -24,6 +27,8 @@ export default function SkillsSection({
   skillBonus: (skill: { id: string; ability: AbilityId }) => number;
   passivePerception: number;
   writeProficiencies: (patch: Json) => Promise<void>;
+  /** Given while the sheet is read: a tap on a skill rolls it. */
+  onRoll?: (roll: { label: string; formula: string }) => void;
 }) {
   return (
     <div className="grid gap-3">
@@ -42,6 +47,47 @@ export default function SkillsSection({
           const abbreviation = DND5E_ABILITIES.find(
             (a) => a.id === skill.ability,
           )?.abbreviation;
+          if (onRoll) {
+            return (
+              <li
+                key={skill.id}
+                data-testid={id}
+                data-proficient={proficient ? "true" : "false"}
+                data-expertise={expert ? "true" : "false"}
+              >
+                <button
+                  type="button"
+                  className="flex min-h-11 w-full items-center gap-2 rounded-md px-1 text-left text-sm transition-colors hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none active:bg-muted"
+                  data-testid={`dnd5e-roll-skill-${skill.id}`}
+                  onClick={() =>
+                    onRoll({ label: skill.label, formula: d20(bonus) })
+                  }
+                >
+                  <span className="w-3 text-center" aria-hidden="true">
+                    {expert ? "◆" : proficient ? "●" : "○"}
+                  </span>
+                  <span
+                    className={`${rollableClass} w-12 py-1 text-center font-semibold tabular-nums`}
+                    data-testid={`${id}-bonus`}
+                  >
+                    {signed(bonus)}
+                  </span>
+                  <span className="flex-1">
+                    <span className="sr-only">Roll </span>
+                    {skill.label}
+                    {proficient ? (
+                      <span className="sr-only">
+                        {expert ? " (expertise)" : " (proficient)"}
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className={`${hintClass} tracking-wider`}>
+                    {abbreviation}
+                  </span>
+                </button>
+              </li>
+            );
+          }
           return (
             <li
               key={skill.id}

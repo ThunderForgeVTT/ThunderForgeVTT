@@ -135,6 +135,21 @@ means `apps/web/src/components/world/PhoneBoard/`.
   restart the preview, send the tunnel URL to the owner's phone; capture
   `adb exec-out screencap` screenshots. **Stop here until the owner has
   reacted**; fold changes into research.md's brief before Phase 4.
+- [x] T044 [US1] T017 feedback: the open demo notice keeps its chip where it
+  was tapped, with a card below it (a full-width view switch, Start over and
+  Run your own as 44px buttons, the credit under a rule) in
+  `apps/demo/src/DemoNotice.tsx`; `demo-notice.spec.ts` checks the chip stays
+  put and the switch is thumb-sized.
+- [x] T045 [US1] T017 feedback: the phone's Sheet pins the name and a hot bar
+  of rolls, actions first, above the sheet, and the sheet runs at full size in
+  the board sheet's scroll (`InPaneCharacterSheet` `layout="phone"`,
+  `CharacterRollButtons` `layout="hotbar"`).
+- [x] T046 [US1] T017 feedback: the character sheet opens read, with an
+  Edit/Done toggle for whoever may edit; `ActorSheetProps.onRoll` lets a pack
+  roll what it shows, and 5e rolls an ability check, save or skill on a tap
+  (`useCharacterRoller` shares the picker and result with the roll buttons).
+  *Done note*: applies to the desktop dock too, since the owner asked for a
+  cleaner sheet generally; `system-roll-for-shoes.spec.ts` now taps Edit.
 - [ ] T018 [P] [US1] Create `web/hooks/useActiveCombat.ts` lifted from
   `PlayDock/CombatPanel.tsx` (`getActiveCombat` + `subscribeToWorldEvents`)
   and make `CombatPanel` use it; `play-panels-by-role.spec.ts` still passes.

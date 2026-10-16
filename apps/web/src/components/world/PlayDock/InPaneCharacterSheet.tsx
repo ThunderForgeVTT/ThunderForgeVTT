@@ -6,8 +6,10 @@ import { AttackFlow } from "./AttackFlow/AttackFlow";
 import { mayEditActor } from "@/pages/world/actor/actorEditRight";
 import { resolveActorSheet } from "@/pages/world/actor/systemActorSheets";
 import type { WorldActorRecord } from "@/types/actor";
-import { CharacterRollButtons } from "./CharacterRollButtons";
+import { cn } from "@/lib/utils";
+import { CharacterRollButtons, RollFeedback } from "./CharacterRollButtons";
 import type { CharacterRoll } from "./characterRolls";
+import { useCharacterRoller } from "./useCharacterRoller";
 import { useCharacterRolls } from "./useCharacterRolls";
 
 /**
@@ -32,9 +34,9 @@ import { useCharacterRolls } from "./useCharacterRolls";
  * full page the first time a pack changed anything, and a player would be
  * looking at a different character to the one their GM sees.
  *
- * # Why the sheet is editable here, for whoever may edit it
+ * # Why the sheet can be edited here, for whoever may edit it
  *
- * The sheet is mounted with the viewer's real edit right — `mayEditActor`,
+ * The sheet is edited with the viewer's real edit right — `mayEditActor`,
  * the same answer the full actor page gives, so the two cannot disagree. It
  * used to be mounted read-only, on the reasoning that a 22rem column during
  * play is the wrong place to restat a character. That holds for restatting
@@ -47,10 +49,17 @@ import { useCharacterRolls } from "./useCharacterRolls";
  *
  * Nothing is granted by this. A Viewer still gets a read-only sheet, and the
  * server refuses a write the caller may not make whatever the sheet offered
- * (Principle III). Unlike the full page there is no separate view and edit
- * mode: the dock has no room for a second control whose only job is to
- * unlock the first, and a pack's sheet decides for itself what is worth
- * offering in place.
+ * (Principle III).
+ *
+ * # Why it opens read, with an Edit toggle
+ *
+ * It used to open straight into its inputs, with no second control whose
+ * only job was to unlock the first. The owner's phone try-out (spec 102)
+ * turned that round: at the table a sheet is mostly read and rolled from,
+ * and a page of boxes is clutter between a player and their numbers. So it
+ * opens read, a tap on a number the pack offers rolls it (`onRoll`), and
+ * Edit, shown only to whoever may edit, turns the boxes on. The same tap
+ * never both rolls and edits, because `onRoll` is withheld while editing.
  *
  * # Why the rolls are separate from the sheet
  *
@@ -79,7 +88,19 @@ export interface InPaneCharacterSheetProps {
    * phone's board sheet closes itself, so it passes none (spec 102).
    */
   onDismiss?: () => void;
+  /**
+   * `phone` (spec 102) pins the name and a hot bar of rolls, actions first,
+   * above the sheet, and lets the sheet run at full size in the board
+   * sheet's own scroll instead of a cramped box of its own.
+   */
+  layout?: "dock" | "phone";
 }
+
+/** Actions (an ability's attack, damage, healing) lead the hot bar. */
+const actionsFirst = (rolls: CharacterRoll[]) => [
+  ...rolls.filter((roll) => roll.key.startsWith("ability-")),
+  ...rolls.filter((roll) => !roll.key.startsWith("ability-")),
+];
 
 export function InPaneCharacterSheet({
   worldId,
@@ -88,9 +109,14 @@ export function InPaneCharacterSheet({
   actor,
   isGm = false,
   onDismiss,
+  layout = "dock",
 }: InPaneCharacterSheetProps) {
   const { user } = useAuth();
   const [attacking, setAttacking] = useState<CharacterRoll | null>(null);
+  const [editing, setEditing] = useState(false);
+  const roller = useCharacterRoller(worldId, isGm);
+  const phone = layout === "phone";
+  const mayEdit = mayEditActor(actor);
   const sheetRef = useRef<HTMLDivElement>(null);
   const sheet = resolveActorSheet(actor.gameSystemId);
 
@@ -106,7 +132,56 @@ export function InPaneCharacterSheet({
     );
   }, [sceneTokens, actor.id, user?.id]);
 
-  const rolls = useCharacterRolls(worldId, actor);
+  const derived = useCharacterRolls(worldId, actor);
+  const rolls = phone ? actionsFirst(derived) : derived;
+  const showRolls = !(sheet && rolls.length === 0);
+  const showFeedback =
+    rolls.length > 0 || roller.result !== null || roller.rollError !== null;
+
+  /*
+    A system that draws its own sheet and rolls from it (Roll for Shoes)
+    has nothing here, and an empty box under a working sheet reads as
+    something broken. The section is for what the sheet does not offer;
+    it says "nothing" only when there is no sheet to have offered it.
+  */
+  const rollSection = showRolls ? (
+    <section className="grid gap-1.5" data-testid="in-pane-sheet-rolls">
+      <h3
+        className={cn(
+          "text-xs font-semibold tracking-widest text-muted-foreground uppercase",
+          phone && "sr-only",
+        )}
+      >
+        Rolls
+      </h3>
+      {rolls.length === 0 ? (
+        <p
+          className="text-xs text-muted-foreground"
+          data-testid="in-pane-sheet-no-rolls"
+        >
+          Nothing on this character carries a formula to roll yet.
+        </p>
+      ) : (
+        <CharacterRollButtons
+          rolls={rolls}
+          roller={roller}
+          testIdPrefix="in-pane"
+          layout={phone ? "hotbar" : "list"}
+          onAttack={setAttacking}
+          attackUnavailable={
+            attackerToken
+              ? null
+              : `${actor.label} has no token on this scene to attack from`
+          }
+        />
+      )}
+      {showFeedback ? (
+        <RollFeedback roller={roller} testIdPrefix="in-pane" />
+      ) : null}
+    </section>
+  ) : showFeedback ? (
+    <RollFeedback roller={roller} testIdPrefix="in-pane" />
+  ) : null;
 
   return (
     <div
@@ -114,33 +189,72 @@ export function InPaneCharacterSheet({
       className="grid gap-3"
       data-testid="in-pane-character-sheet"
     >
-      <header className="flex items-center gap-2">
-        {onDismiss ? (
-          <button
-            type="button"
-            onClick={onDismiss}
-            data-testid="in-pane-sheet-dismiss"
-            aria-label="Back to actors"
-            className="rounded border border-border px-2 py-1 text-xs transition-colors hover:bg-muted"
+      <div
+        className={
+          phone
+            ? "sticky -top-4 z-10 -mx-4 -mt-4 grid gap-2 border-b border-border bg-background px-4 pt-3 pb-2"
+            : "contents"
+        }
+        data-testid="in-pane-sheet-top"
+      >
+        <header className="flex items-center gap-2">
+          {onDismiss ? (
+            <button
+              type="button"
+              onClick={onDismiss}
+              data-testid="in-pane-sheet-dismiss"
+              aria-label="Back to actors"
+              className="rounded border border-border px-2 py-1 text-xs transition-colors hover:bg-muted"
+            >
+              ‹ Back
+            </button>
+          ) : null}
+          <span
+            className={cn(
+              "min-w-0 flex-1 truncate font-semibold",
+              phone ? "text-base" : "text-sm",
+            )}
           >
-            ‹ Back
-          </button>
-        ) : null}
-        <span className="min-w-0 flex-1 truncate text-sm font-semibold">
-          {actor.label}
-        </span>
-      </header>
+            {actor.label}
+          </span>
+          {sheet && mayEdit ? (
+            <button
+              type="button"
+              onClick={() => setEditing((on) => !on)}
+              aria-pressed={editing}
+              data-testid="in-pane-sheet-edit"
+              className={cn(
+                "border border-border font-medium transition-colors hover:bg-muted",
+                phone
+                  ? "min-h-11 min-w-16 rounded-xl px-4 text-sm"
+                  : "rounded px-2 py-1 text-xs",
+                editing &&
+                  "border-primary bg-primary text-primary-foreground hover:bg-primary/90",
+              )}
+            >
+              {editing ? "Done" : "Edit"}
+            </button>
+          ) : null}
+        </header>
+        {phone ? rollSection : null}
+      </div>
 
       {/*
         The pack's sheet was drawn for a page, not a 22rem column. Scaling its
         type down and letting it scroll inside its own box keeps it legible
         here without every pack needing a second layout — and without this
-        component knowing anything about what that sheet contains.
+        component knowing anything about what that sheet contains. A phone's
+        board sheet already scrolls, so there it runs at full size.
       */}
       {sheet ? (
         <div
-          className="max-h-[45vh] overflow-y-auto rounded-lg border border-border text-xs [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm"
+          className={
+            phone
+              ? "text-sm"
+              : "max-h-[45vh] overflow-y-auto rounded-lg border border-border text-xs [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm"
+          }
           data-testid="in-pane-sheet-body"
+          data-editing={editing ? "true" : "false"}
         >
           {/*
             `createElement` rather than `<Sheet />` with a capitalised local:
@@ -150,7 +264,14 @@ export function InPaneCharacterSheet({
             module-level registry keyed by a string. Writing the call out
             keeps the rule enforced everywhere else rather than disabled here.
           */}
-          {createElement(sheet, { actor, canEdit: mayEditActor(actor) })}
+          {createElement(sheet, {
+            actor,
+            canEdit: editing && mayEdit,
+            onRoll: editing
+              ? undefined
+              : ({ label, formula }) =>
+                  void roller.roll(`sheet-${label}`, label, formula),
+          })}
         </div>
       ) : (
         /*
@@ -171,40 +292,7 @@ export function InPaneCharacterSheet({
         </p>
       )}
 
-      {/*
-        A system that draws its own sheet and rolls from it (Roll for Shoes)
-        has nothing here, and an empty box under a working sheet reads as
-        something broken. The section is for what the sheet does not offer;
-        it says "nothing" only when there is no sheet to have offered it.
-      */}
-      {sheet && rolls.length === 0 ? null : (
-        <section className="grid gap-1.5" data-testid="in-pane-sheet-rolls">
-          <h3 className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
-            Rolls
-          </h3>
-          {rolls.length === 0 ? (
-            <p
-              className="text-xs text-muted-foreground"
-              data-testid="in-pane-sheet-no-rolls"
-            >
-              Nothing on this character carries a formula to roll yet.
-            </p>
-          ) : (
-            <CharacterRollButtons
-              worldId={worldId}
-              rolls={rolls}
-              isGm={isGm}
-              testIdPrefix="in-pane"
-              onAttack={setAttacking}
-              attackUnavailable={
-                attackerToken
-                  ? null
-                  : `${actor.label} has no token on this scene to attack from`
-              }
-            />
-          )}
-        </section>
-      )}
+      {phone ? null : rollSection}
 
       {attacking?.attackAbilityId && attackerToken ? (
         <AttackFlow

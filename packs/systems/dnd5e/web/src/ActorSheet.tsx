@@ -121,7 +121,14 @@ const WIDE_CLASS: Partial<Record<string, string>> = {
  * edit route. Without it every value is text, and no input, checkbox or
  * button is drawn. The server refuses a write from anyone else regardless.
  */
-export default function DnD5eActorSheet({ actor, canEdit }: ActorSheetProps) {
+export default function DnD5eActorSheet({
+  actor,
+  canEdit,
+  onRoll,
+}: ActorSheetProps) {
+  // Spec 102: while the sheet is read, a check, save or skill is a tap to
+  // roll. Never while editing, where the same numbers are inputs.
+  const roll = canEdit ? undefined : onRoll;
   const { data, refetch } = useActorSystemData(actor.id, "dnd5e");
   const [error, setError] = useState<string | null>(null);
   const [isPending, setPending] = useState(false);
@@ -355,6 +362,7 @@ export default function DnD5eActorSheet({ actor, canEdit }: ActorSheetProps) {
             saveProficiencies={saveProficiencies}
             handleScoreChange={handleScoreChange}
             writeProficiencies={writeProficiencies}
+            onRoll={roll}
           />
         );
 
@@ -393,6 +401,7 @@ export default function DnD5eActorSheet({ actor, canEdit }: ActorSheetProps) {
             skillBonus={skillBonus}
             passivePerception={passivePerception}
             writeProficiencies={writeProficiencies}
+            onRoll={roll}
           />
         );
 

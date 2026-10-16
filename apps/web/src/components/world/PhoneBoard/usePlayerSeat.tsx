@@ -34,10 +34,11 @@ export function usePlayerSeat({
   tokens,
   selectOne,
 }: PlayerSeatInput) {
-  const [actor, setActor] = useState<WorldActorRecord | null>(null);
+  const [fetched, setActor] = useState<WorldActorRecord | null>(null);
+  // A character fetched for an earlier claim is not this one.
+  const actor = fetched?.id === claimedActorId ? fetched : null;
 
   useEffect(() => {
-    setActor(null);
     if (!claimedActorId) return;
     let active = true;
     getWorldActors(worldId)
@@ -96,6 +97,7 @@ export function usePlayerSeat({
         worldStore={worldStore}
         sceneId={sceneId}
         actor={actor}
+        layout="phone"
       />
     ) : (
       note(

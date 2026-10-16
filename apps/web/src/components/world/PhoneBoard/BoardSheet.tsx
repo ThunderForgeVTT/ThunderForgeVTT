@@ -46,7 +46,9 @@ export function BoardSheet({
 }: BoardSheetProps) {
   const open = contentId !== null;
   const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
   const returnTo = useRef<HTMLElement | null>(null);
   const dragFrom = useRef<number | null>(null);
 

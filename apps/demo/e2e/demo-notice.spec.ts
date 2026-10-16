@@ -34,6 +34,19 @@ test("on a phone the notice is a pill that opens and closes on tap", async ({
     await expect(startOver).toBeVisible();
     await expect(notice.getByTestId("demo-viewer")).toBeVisible();
     await expect(notice.getByRole("link", { name: "MBRound18" })).toBeVisible();
+    // Open, the chip stays where it was tapped and the card hangs below it,
+    // so the same thumb closes it (the owner's T017 try-out).
+    const toggleBox = await toggle.boundingBox();
+    const openBox = await notice.boundingBox();
+    expect(toggleBox!.y - openBox!.y).toBeLessThanOrEqual(4);
+    const switchBox = await notice
+      .getByTestId("demo-viewer")
+      .getByRole("button")
+      .boundingBox();
+    expect(
+      switchBox!.height,
+      "the view switch is thumb-sized",
+    ).toBeGreaterThanOrEqual(44);
 
     await toggle.click();
     await expect(toggle).toHaveAttribute("aria-expanded", "false");

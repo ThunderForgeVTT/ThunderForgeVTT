@@ -771,9 +771,9 @@
         "apps/web/index.html",
         "apps/demo/index.html",
         "apps/demo/src/DemoNotice.tsx",
-        "apps/demo/e2e/phone-board.spec.ts"
+        "apps/demo/e2e/{phone-board,demo-notice}.spec.ts"
       ],
-      "standalone": "pnpm -F @thunderforge/demo e2e phone-board"
+      "standalone": "pnpm -F @thunderforge/demo e2e phone-board demo-notice"
     },
     {
       "name": "play-pause",
@@ -870,7 +870,7 @@
       ],
       "paths": [
         "apps/web/src/components/world/PlayDock/{RollEntry,CharacterRollButtons}.tsx",
-        "apps/web/src/components/world/PlayDock/{feedTime,useCharacterRolls,systemStatRolls}.ts",
+        "apps/web/src/components/world/PlayDock/{feedTime,useCharacterRolls,useCharacterRoller,systemStatRolls}.ts",
         "apps/web/src/lib/systemPackIndexes.ts",
         "apps/web/src/components/world/RollVisibility/**",
         "apps/web/src/pages/world/actor/ActorRollsPanel.tsx",
