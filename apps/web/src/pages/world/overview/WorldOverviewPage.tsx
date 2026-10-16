@@ -100,7 +100,10 @@ export default function WorldOverviewPage() {
   const world = state.requestedId === id ? state.world : null;
   const status = state.requestedId === id ? state.status : null;
 
-  const { cleared: claimGateCleared } = useActorClaimGate(id, world);
+  const { cleared: claimGateCleared, lookingAround } = useActorClaimGate(
+    id,
+    world,
+  );
   const { role, isGm, loading: roleLoading } = useWorldRole(id, world);
   const scenes = useSceneHeadlines(id);
   // Deleting ends the world for everyone, so it is the Owner's alone — the
@@ -233,6 +236,21 @@ export default function WorldOverviewPage() {
               )}
             </div>
           </header>
+
+          {lookingAround ? (
+            <Card
+              surface="stone"
+              className="flex flex-wrap items-center justify-between gap-3 p-4"
+              data-testid="world-choose-character"
+            >
+              <p>You have not chosen a character in this world yet.</p>
+              <Button asChild icon="actors">
+                <Link to={`/world/${world.id}/actor-select`}>
+                  Choose your character
+                </Link>
+              </Button>
+            </Card>
+          ) : null}
 
           {reachedThroughAdminAccess({ isAdmin, role, roleLoading }) ? (
             <StatusBadge

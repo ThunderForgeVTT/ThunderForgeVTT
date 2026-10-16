@@ -34,6 +34,31 @@ export interface UseActorClaimGateResult {
    * caller is exempt, or they already hold a claim). False while the
    * check is in flight, or after a redirect has been issued. */
   cleared: boolean;
+  /** Cleared without a claim: the member chose to look around first. */
+  lookingAround: boolean;
+}
+
+// Spec 100 FR-011: the old staging page let a member with no character see
+// the world before choosing one. The overview replaced it, so the choice is
+// made on Actor Selection instead and kept for this tab only: a new visit
+// asks again. Storage that throws (a private window) just means asking.
+const lookingAroundKey = (worldId: string) => `tf:looking-around:${worldId}`;
+
+/** Lets the member into the world's overview before they claim a character. */
+export function lookAroundFirst(worldId: string) {
+  try {
+    sessionStorage.setItem(lookingAroundKey(worldId), "1");
+  } catch {
+    // The overview will send them back to choose; nothing is lost.
+  }
+}
+
+function isLookingAround(worldId: string): boolean {
+  try {
+    return sessionStorage.getItem(lookingAroundKey(worldId)) === "1";
+  } catch {
+    return false;
+  }
 }
 
 export function useActorClaimGate(
@@ -44,6 +69,7 @@ export function useActorClaimGate(
   const { user } = useAuth();
   const [exempt, setExempt] = useState(false);
   const [hasClaim, setHasClaim] = useState(false);
+  const [lookingAround, setLookingAround] = useState(false);
 
   // A world's creator commonly has no `world_members` row at all (this
   // app never backfills one at `createWorld` time — see
@@ -77,6 +103,8 @@ export function useActorClaimGate(
           }
           if (claim) {
             setHasClaim(true);
+          } else if (isLookingAround(worldId)) {
+            setLookingAround(true);
           } else {
             navigate(`/world/${worldId}/actor-select`, { replace: true });
           }
@@ -95,5 +123,8 @@ export function useActorClaimGate(
     };
   }, [worldId, world, user, isCreator, navigate]);
 
-  return { cleared: isCreator || exempt || hasClaim };
+  return {
+    cleared: isCreator || exempt || hasClaim || lookingAround,
+    lookingAround: !isCreator && !exempt && !hasClaim && lookingAround,
+  };
 }

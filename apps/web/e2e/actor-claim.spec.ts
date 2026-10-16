@@ -183,6 +183,64 @@ test.describe("Spec 017 US1: a joining player picks a GM-designated character", 
     await secondContext.close();
   });
 
+  // Spec 100 FR-011: the overview replaced staging, which was how a member
+  // with no character saw the world before choosing one.
+  test("a player with no character can look around first, for this tab only", async ({
+    browser,
+  }) => {
+    const gmContext = await browser.newContext({
+      permissions: ["clipboard-read", "clipboard-write"],
+    });
+    const gmPage = await gmContext.newPage();
+    const worldId = await registerAndCreateWorld(
+      gmPage,
+      `E2E Look Around ${uniqueSuffix()}`,
+    );
+    const inviteCode = await generateInviteCode(gmPage, worldId);
+
+    const playerContext = await browser.newContext();
+    const playerPage = await playerContext.newPage();
+    await register(playerPage, freshCredentials("e2elookplyr"));
+    await playerPage.goto(`/join/${inviteCode}`);
+    await playerPage.getByRole("button", { name: "Join Campaign" }).click();
+    await expect(playerPage).toHaveURL(
+      new RegExp(`/world/${worldId}/actor-select$`),
+      { timeout: 15_000 },
+    );
+
+    await playerPage.getByTestId("actor-select-look-around").click();
+    await expect(playerPage).toHaveURL(new RegExp(`/world/${worldId}$`));
+    await expect(playerPage.getByTestId("world-staging-page")).toBeVisible();
+    const reminder = playerPage.getByTestId("world-choose-character");
+    await expect(reminder).toBeVisible();
+
+    // The choice holds across a reload of the same tab...
+    await playerPage.reload();
+    await expect(
+      playerPage.getByTestId("world-choose-character"),
+    ).toBeVisible();
+
+    // ...and the reminder leads back to the picker.
+    await playerPage
+      .getByTestId("world-choose-character")
+      .getByRole("link", { name: "Choose your character" })
+      .click();
+    await expect(playerPage).toHaveURL(
+      new RegExp(`/world/${worldId}/actor-select$`),
+    );
+
+    // A new tab asks again.
+    const secondTab = await playerContext.newPage();
+    await secondTab.goto(`/world/${worldId}`);
+    await expect(secondTab).toHaveURL(
+      new RegExp(`/world/${worldId}/actor-select$`),
+      { timeout: 15_000 },
+    );
+
+    await gmContext.close();
+    await playerContext.close();
+  });
+
   // Until this, the only way to a claimable character was the one
   // `createPcActor` takes: make a creature, edit it into a player character,
   // then offer it from a third screen.

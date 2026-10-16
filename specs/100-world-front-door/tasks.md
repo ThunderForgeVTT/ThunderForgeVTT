@@ -48,3 +48,9 @@
 
 - [x] T016 Screenshots before and after at 390, 1440 and 3440 for the
   owner, phone included (SC-008). Ships only on the owner's greenlight.
+
+## Phase 8: Owner follow-ups
+
+- [x] T017 "Look around first" on Actor Selection and the overview's
+  reminder (FR-011), with its e2e in `actor-claim.spec.ts`.
+- [x] T018 The four-column 5e sheet pairs regions by height (FR-012).

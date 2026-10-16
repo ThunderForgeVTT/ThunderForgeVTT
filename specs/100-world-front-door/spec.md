@@ -84,7 +84,9 @@ the sidebar shell, with Play as its first action.
 5. A player who has not claimed a character still goes through
    `/world/:id/actor-select` (spec 017): the overview keeps the old hub's
    claim gate, so opening the world sends them there. `/play` itself does
-   not gate.
+   not gate. Staging was how such a player saw the world before choosing,
+   so Actor Selection offers "Look around first": the overview opens for
+   the rest of that tab, with a reminder that leads back to the picker.
 6. The overview keeps everything the two pages held that a member uses:
    last session notes, the invite link, the system's `world-staging`
    panel slot, the play-paused banner, and, for a Game Master, the
@@ -189,6 +191,13 @@ and identity in a rail, and the system sheet across the rest of the page.
   not stored.
 - **FR-010**: Nothing here changes what a role may do. Every action shown
   or hidden follows the existing GM/player checks.
+- **FR-011**: "Look around first" is kept in `sessionStorage` per world,
+  so it lasts for the tab and a new tab asks again. Storage that throws
+  means the gate asks as before. It grants nothing: the overview shows a
+  member only what it already shows them.
+- **FR-012**: From `@7xl` the 5e sheet pairs regions of a height in each
+  row (CSS `order` and two-row spans), so no row holds a short region
+  beside a tall one and no column of a row is left empty.
 
 ### Out of scope
 
