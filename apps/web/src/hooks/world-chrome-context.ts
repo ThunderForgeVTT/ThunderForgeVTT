@@ -48,6 +48,11 @@ export interface WorldChromeStore {
 
 export const WorldChromeContext = createContext<WorldChromeStore | null>(null);
 
+/** The store itself, for a hook that needs more than one key's value. */
+export function useWorldChromeStore(): WorldChromeStore {
+  return useStore();
+}
+
 function useStore(): WorldChromeStore {
   const store = useContext(WorldChromeContext);
   if (!store) {

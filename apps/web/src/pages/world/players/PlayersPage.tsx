@@ -22,6 +22,7 @@ import { filterPlayers } from "@/pages/world/players/playerFilter";
 import { describeStanding } from "@/pages/world/players/playerStanding";
 import type { WorldActorRecord } from "@/types/actor";
 import { useAuth } from "@/hooks/useAuth";
+import { useWorldMembers } from "@/hooks/useWorldMembers";
 import {
   assignableRoles,
   canManageRole,
@@ -101,6 +102,14 @@ export function PlayersPage({ worldId, isGm }: PlayersPageProps) {
       active = false;
     };
   }, [worldId, refreshTick]);
+
+  // Spec 101 US2.3: what changed here (a role, a character, a removal) is
+  // what every other page of the world reads from the shared member list,
+  // so it is read again with this page's own.
+  const { refetch: refetchKnownMembers } = useWorldMembers(worldId);
+  useEffect(() => {
+    if (refreshTick > 0) void refetchKnownMembers();
+  }, [refreshTick, refetchKnownMembers]);
 
   // Every viewer reads the actor list: a GM to bind characters, and anyone to
   // learn which claimed heroes they may edit (`myPermissionLevel` and

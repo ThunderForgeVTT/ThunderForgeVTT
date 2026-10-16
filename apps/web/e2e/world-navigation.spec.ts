@@ -2,6 +2,7 @@ import type { Page } from "@playwright/test";
 import { test, expect } from "./fixtures/test";
 import {
   graphql,
+  inviteAndJoinAsPlayer,
   registerAndCreateWorld,
   uniqueSuffix,
 } from "./fixtures/helpers";
@@ -13,25 +14,46 @@ import {
  */
 
 /**
- * Counts every time the full-screen loader enters the page from now on.
- * A MutationObserver rather than a poll: the loader can come and go between
- * two polls, and that blink is exactly what this spec is about.
+ * Records, from now on, every time the full-screen loader enters the page
+ * and every time the world's sidebar is drawn with or without the Game
+ * Master's group. A MutationObserver rather than a poll: a loader or a late
+ * control can come and go between two polls, and that blink is exactly
+ * what this spec is about.
  */
-async function watchForLoader(page: Page) {
+async function watchPaints(page: Page) {
   await page.evaluate(() => {
-    const w = window as unknown as { __loaderSeen: number };
-    w.__loaderSeen = 0;
-    new MutationObserver(() => {
+    const seen = { loader: 0, sidebarWithoutAdmin: 0, admin: 0 };
+    (window as unknown as { __seen: typeof seen }).__seen = seen;
+    const look = () => {
       if (document.querySelector('[data-testid="page-loader"]')) {
-        w.__loaderSeen += 1;
+        seen.loader += 1;
       }
-    }).observe(document.body, { childList: true, subtree: true });
+      const sidebar = document.querySelector(
+        '[data-testid="world-sidebar-nav"]',
+      );
+      const admin = document.querySelector('[data-testid="world-nav-admin"]');
+      if (admin) seen.admin += 1;
+      if (sidebar && !admin) seen.sidebarWithoutAdmin += 1;
+    };
+    new MutationObserver(look).observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
   });
 }
 
-const loaderSeen = (page: Page) =>
+const seen = (page: Page) =>
   page.evaluate(
-    () => (window as unknown as { __loaderSeen: number }).__loaderSeen,
+    () =>
+      (
+        window as unknown as {
+          __seen: {
+            loader: number;
+            sidebarWithoutAdmin: number;
+            admin: number;
+          };
+        }
+      ).__seen,
   );
 
 async function goBySidebar(page: Page, name: string, url: RegExp) {
@@ -52,8 +74,9 @@ test.describe("Spec 101: smooth world navigation", () => {
     );
     await page.goto(`/world/${worldId}`);
     await expect(page.getByTestId("world-staging-page")).toBeVisible();
+    await expect(page.getByTestId("world-nav-admin")).toBeVisible();
     // A client-side route change only: the observer lives in this document.
-    await watchForLoader(page);
+    await watchPaints(page);
 
     const stops: [string, RegExp, string][] = [
       ["Players", /\/players$/, "players-search-input"],
@@ -69,10 +92,63 @@ test.describe("Spec 101: smooth world navigation", () => {
     for (const [name, url, testId] of stops) {
       await goBySidebar(page, name, url);
       await expect(page.getByTestId(testId)).toBeVisible();
-      expect(await loaderSeen(page), `loader shown on the way to ${name}`).toBe(
-        0,
-      );
+      const now = await seen(page);
+      expect(now.loader, `loader shown on the way to ${name}`).toBe(0);
+      // SC-002: the GM's group is there on the first paint, not added late.
+      expect(
+        now.sidebarWithoutAdmin,
+        `sidebar drawn without GM controls on the way to ${name}`,
+      ).toBe(0);
     }
+  });
+
+  test("a player never sees the Game Master's controls, even for a moment (FR-006)", async ({
+    page,
+    browser,
+  }) => {
+    const worldId = await registerAndCreateWorld(
+      page,
+      `E2E Navigation Player ${uniqueSuffix()}`,
+    );
+    const player = await inviteAndJoinAsPlayer(browser, page, worldId);
+    await player.goto(`/world/${worldId}/players`);
+    await expect(player.getByTestId("players-search-input")).toBeVisible();
+    await watchPaints(player);
+
+    await goBySidebar(player, "Scenes", /\/scenes$/);
+    await goBySidebar(player, "NPCs", /\/compendium\?tab=npcs$/);
+    await goBySidebar(player, "Players", /\/players$/);
+    await expect(player.getByTestId("players-search-input")).toBeVisible();
+    const now = await seen(player);
+    expect(now.admin).toBe(0);
+    expect(now.loader).toBe(0);
+    await player.context().close();
+  });
+
+  test("a promotion shows on the promoted player's next page (US2.3)", async ({
+    page,
+    browser,
+  }) => {
+    const worldId = await registerAndCreateWorld(
+      page,
+      `E2E Navigation Promote ${uniqueSuffix()}`,
+    );
+    const player = await inviteAndJoinAsPlayer(browser, page, worldId);
+    await player.goto(`/world/${worldId}/players`);
+    await expect(player.getByTestId("players-search-input")).toBeVisible();
+    await expect(player.getByTestId("world-nav-admin")).toHaveCount(0);
+
+    await page.goto(`/world/${worldId}/players`);
+    const roleSelect = page
+      .getByTestId("players-list")
+      .locator('select[data-testid^="player-role-select-"]')
+      .first();
+    await roleSelect.selectOption("GM");
+    await expect(roleSelect).toHaveValue("GM", { timeout: 10_000 });
+
+    await goBySidebar(player, "Scenes", /\/scenes$/);
+    await expect(player.getByTestId("world-nav-admin")).toBeVisible();
+    await player.context().close();
   });
 
   test("a change made elsewhere shows on the next page (FR-003)", async ({

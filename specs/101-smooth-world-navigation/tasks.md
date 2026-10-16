@@ -60,7 +60,7 @@ Paths are relative to the repo root; `web/` means `apps/web/src/`.
 **Goal**: no full-screen loader after a world's first page in a tab.
 **Independent test**: SC-001 in `world-navigation.spec.ts`.
 
-- [ ] T008 [US1] Write `apps/web/e2e/world-navigation.spec.ts` "a Game
+- [X] T008 [US1] Write `apps/web/e2e/world-navigation.spec.ts` "a Game
   Master moves between a world's pages without a loader": register and
   create a world (`registerAndCreateWorld`), open the overview, then click
   Players, Scenes, Compendium, System Settings, Overview in the sidebar;
@@ -103,22 +103,22 @@ Paths are relative to the repo root; `web/` means `apps/web/src/`.
 **Goal**: GM-only nav and controls on each page's first paint.
 **Independent test**: SC-002.
 
-- [ ] T017 [US2] Add to `world-navigation.spec.ts`: on the GM's walk,
+- [X] T017 [US2] Add to `world-navigation.spec.ts`: on the GM's walk,
   `world-nav-admin` is present at the first paint of each page after the
   first (assert inside the same `MutationObserver` window as T008); a
   player (`inviteAndJoinAsPlayer`, with a claimed character) walks the
   same pages and `world-nav-admin` is never attached. See the GM half fail.
-- [ ] T018 [US2] `web/hooks/useWorldMembers.ts`: seed `members` from
+- [X] T018 [US2] `web/hooks/useWorldMembers.ts`: seed `members` from
   `useWorldChrome(worldId, "members", …)`; `loading` is true only when
   none are known; every fetch and `refetch` writes the store; an error
   keeps known members instead of clearing them.
-- [ ] T019 [US2] `web/hooks/useWorldRole.ts`: no API change; confirm
+- [X] T019 [US2] `web/hooks/useWorldRole.ts`: no API change; confirm
   `loading` follows T018 and a player's role never reads as GM while a
   read is in flight (FR-006): extract the role decision `useWorldRole`
   already makes (members, user, world → role) as a pure function if it is
   not one, and cover "no members known, not the creator → not GM" in
   `web/hooks/useWorldRole.test.ts`.
-- [ ] T020 [US2] Role changes on the Players page
+- [X] T020 [US2] Role changes on the Players page
   (`web/pages/world/players/PlayersPage.tsx`) call the members `refetch`
   or remember the new list, so the next page shows the new role
   (US2.3). Add the case to `world-navigation.spec.ts`. T017 passes.

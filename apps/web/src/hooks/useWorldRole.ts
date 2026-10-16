@@ -15,6 +15,7 @@
 import { useMemo } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useWorldMembers } from "@/hooks/useWorldMembers";
+import type { WorldMemberDoc } from "@/db/collections/worldMembersCollection";
 import {
   managesContent,
   runsTheWorld,
@@ -36,6 +37,23 @@ export interface UseWorldRoleResult {
   loading: boolean;
 }
 
+/**
+ * The caller's role from the members known so far. With none known yet the
+ * answer is the creator's fallback or nobody, never a guess at Game Master
+ * (spec 101 FR-006): GM controls wait for the list rather than flash.
+ */
+export function roleIn(
+  members: readonly Pick<WorldMemberDoc, "user_id" | "role">[],
+  userId: string | null,
+  world: Pick<WorldRecord, "createdBy"> | null,
+): WorldRole {
+  if (!userId) return null;
+  const membership = members.find((member) => member.user_id === userId);
+  if (membership) return membership.role;
+  if (world && world.createdBy === userId) return "Owner";
+  return null;
+}
+
 export function useWorldRole(
   worldId: string,
   world: WorldRecord | null,
@@ -43,22 +61,10 @@ export function useWorldRole(
   const { user } = useAuth();
   const { members, loading } = useWorldMembers(worldId);
 
-  const role = useMemo<WorldRole>(() => {
-    if (!user) {
-      return null;
-    }
-
-    const membership = members.find((member) => member.user_id === user.id);
-    if (membership) {
-      return membership.role;
-    }
-
-    if (world && world.createdBy === user.id) {
-      return "Owner";
-    }
-
-    return null;
-  }, [members, user, world]);
+  const role = useMemo<WorldRole>(
+    () => roleIn(members, user?.id ?? null, world),
+    [members, user, world],
+  );
 
   return {
     role,
