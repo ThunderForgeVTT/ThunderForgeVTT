@@ -37,6 +37,20 @@ export interface DiceRollerPanelProps {
  * never blocks or hides a resolved roll).
  */
 
+/**
+ * One tap, one die (owner's T017 ask): the common single rolls, so nobody
+ * types `1d6` to roll a d6. `dc` is the dice parser's coin.
+ */
+const QUICK_DICE = [
+  ["d20", "1d20"],
+  ["d12", "1d12"],
+  ["d10", "1d10"],
+  ["d8", "1d8"],
+  ["d6", "1d6"],
+  ["d4", "1d4"],
+  ["Coin", "1dc"],
+] as const;
+
 export function DiceRollerPanel({
   worldId,
   engineReady,
@@ -49,12 +63,13 @@ export function DiceRollerPanel({
   // Spec 081: who sees the roll, remembered per browser.
   const [visibility, setVisibility] = useRollVisibility(isGameMaster);
 
-  const handleRoll = async () => {
+  const handleRoll = async (rolled: string = formula) => {
+    setFormula(rolled);
     setIsRolling(true);
     setError(null);
     setResult(null);
     try {
-      const resolution = await rollDice(worldId, formula, { visibility });
+      const resolution = await rollDice(worldId, rolled, { visibility });
 
       // Spec 081 (FR-013): the board animates this roll from its world
       // event, like every other client's roll; the panel only waits for the
@@ -90,6 +105,40 @@ export function DiceRollerPanel({
         minWidth: "12rem",
       }}
     >
+      <div
+        role="group"
+        aria-label="Quick roll"
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(2.75rem, 1fr))",
+          gap: "0.25rem",
+        }}
+      >
+        {QUICK_DICE.map(([name, die]) => (
+          <button
+            key={die}
+            type="button"
+            data-testid={`dice-quick-${name.toLowerCase()}`}
+            onClick={() => void handleRoll(die)}
+            disabled={isRolling}
+            aria-label={name === "Coin" ? "Flip a coin" : `Roll a ${name}`}
+            style={{
+              minHeight: "2.75rem",
+              borderRadius: "0.5rem",
+              border: "1px solid rgba(255, 255, 255, 0.2)",
+              background: "transparent",
+              color: "inherit",
+              fontSize: "0.875rem",
+              fontWeight: 600,
+              fontVariantNumeric: "tabular-nums",
+              touchAction: "manipulation",
+              cursor: isRolling ? "wait" : "pointer",
+            }}
+          >
+            {name}
+          </button>
+        ))}
+      </div>
       <div style={{ display: "flex", gap: "0.5rem" }}>
         <input
           data-testid="dice-formula-input"

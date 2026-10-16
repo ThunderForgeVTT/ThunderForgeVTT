@@ -13,15 +13,24 @@ export function useCharacterRoller(worldId: string, isGm: boolean) {
   const [visibility, setVisibility] = useRollVisibility(isGm);
   const [rolling, setRolling] = useState<string | null>(null);
   const [result, setResult] = useState<RollResolutionRecord | null>(null);
+  /** What the last result was a roll of: "Acrobatics", "Longsword (damage)". */
+  const [resultLabel, setResultLabel] = useState<string | null>(null);
   const [rollError, setRollError] = useState<string | null>(null);
 
   const roll = async (key: string, label: string, formula: string) => {
     setRolling(key);
     setRollError(null);
-    setResult(null);
+    // The last result stays until this one lands: clearing it first made the
+    // phone's pinned top collapse and grow back on every tap.
     try {
-      setResult(await rollDice(worldId, formula, { label, visibility }));
+      const resolution = await rollDice(worldId, formula, {
+        label,
+        visibility,
+      });
+      setResult(resolution);
+      setResultLabel(label);
     } catch (error) {
+      setResult(null);
       setRollError(
         error instanceof Error ? error.message : "Failed to roll dice",
       );
@@ -30,7 +39,16 @@ export function useCharacterRoller(worldId: string, isGm: boolean) {
     }
   };
 
-  return { isGm, visibility, setVisibility, rolling, result, rollError, roll };
+  return {
+    isGm,
+    visibility,
+    setVisibility,
+    rolling,
+    result,
+    resultLabel,
+    rollError,
+    roll,
+  };
 }
 
 export type CharacterRoller = ReturnType<typeof useCharacterRoller>;

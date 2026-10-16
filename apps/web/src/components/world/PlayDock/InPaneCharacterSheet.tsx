@@ -1,4 +1,4 @@
-import { createElement, useMemo, useRef, useState } from "react";
+import { createElement, useEffect, useMemo, useRef, useState } from "react";
 import type { WorldStore } from "@/engine/world/store";
 import { useSceneTokens } from "@/engine/world/useSceneTokens";
 import { useAuth } from "@/hooks/useAuth";
@@ -132,6 +132,13 @@ export function InPaneCharacterSheet({
     );
   }, [sceneTokens, actor.id, user?.id]);
 
+  // The phone's sheet may be scrolled deep into the skills; bring the top,
+  // and the attack under it, back into view.
+  useEffect(() => {
+    if (phone && attacking)
+      sheetRef.current?.scrollIntoView({ block: "start" });
+  }, [phone, attacking]);
+
   const derived = useCharacterRolls(worldId, actor);
   const rolls = phone ? actionsFirst(derived) : derived;
   const showRolls = !(sheet && rolls.length === 0);
@@ -182,6 +189,30 @@ export function InPaneCharacterSheet({
   ) : showFeedback ? (
     <RollFeedback roller={roller} testIdPrefix="in-pane" />
   ) : null;
+
+  const attackFlow =
+    attacking?.attackAbilityId && attackerToken ? (
+      <AttackFlow
+        // A new attack starts clean: which target, reaction or not.
+        key={attacking.key}
+        worldId={worldId}
+        attackerTokenId={attackerToken.tokenId}
+        abilityId={attacking.attackAbilityId}
+        abilityName={attacking.label.replace(/ \(attack\)$/, "")}
+        tokens={sceneTokens}
+        onClose={() => {
+          // Back to the attack that opened the flow, which stays on the
+          // sheet: closing must not drop a keyboard user on the page.
+          const key = attacking.key;
+          setAttacking(null);
+          sheetRef.current
+            ?.querySelector<HTMLElement>(
+              `[data-testid="in-pane-roll-${CSS.escape(key)}"]`,
+            )
+            ?.focus();
+        }}
+      />
+    ) : null;
 
   return (
     <div
@@ -240,6 +271,13 @@ export function InPaneCharacterSheet({
       </div>
 
       {/*
+        On the phone the attack opens right under the hot bar that started
+        it: at the foot of a full sheet it opened out of sight, and the tap
+        read as doing nothing.
+      */}
+      {phone ? attackFlow : null}
+
+      {/*
         The pack's sheet was drawn for a page, not a 22rem column. Scaling its
         type down and letting it scroll inside its own box keeps it legible
         here without every pack needing a second layout — and without this
@@ -294,28 +332,7 @@ export function InPaneCharacterSheet({
 
       {phone ? null : rollSection}
 
-      {attacking?.attackAbilityId && attackerToken ? (
-        <AttackFlow
-          // A new attack starts clean: which target, reaction or not.
-          key={attacking.key}
-          worldId={worldId}
-          attackerTokenId={attackerToken.tokenId}
-          abilityId={attacking.attackAbilityId}
-          abilityName={attacking.label.replace(/ \(attack\)$/, "")}
-          tokens={sceneTokens}
-          onClose={() => {
-            // Back to the attack that opened the flow, which stays on the
-            // sheet: closing must not drop a keyboard user on the page.
-            const key = attacking.key;
-            setAttacking(null);
-            sheetRef.current
-              ?.querySelector<HTMLElement>(
-                `[data-testid="in-pane-roll-${CSS.escape(key)}"]`,
-              )
-              ?.focus();
-          }}
-        />
-      ) : null}
+      {phone ? null : attackFlow}
     </div>
   );
 }

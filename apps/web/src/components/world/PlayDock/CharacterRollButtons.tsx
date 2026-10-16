@@ -75,15 +75,19 @@ export function CharacterRollButtons({
             <button
               type="button"
               disabled={roller.rolling !== null || blocked !== null}
+              aria-busy={roller.rolling === roll.key}
               title={blocked ?? undefined}
               onClick={() => handleRoll(roll)}
               data-testid={`${testIdPrefix}-roll-${roll.key}`}
               data-attack={roll.attackAbilityId ? "true" : undefined}
               className={cn(
-                "border border-border text-left transition-colors hover:bg-muted disabled:opacity-60",
+                "border border-border text-left transition-colors hover:bg-muted",
+                // On the hot bar one roll in flight must not dim the whole row
+                // or change a chip's width: the bar is what the thumb is on.
                 hotbar
-                  ? "flex min-h-11 max-w-48 flex-col justify-center rounded-xl px-3 py-1 text-sm active:bg-muted"
-                  : "flex w-full items-center gap-2 rounded px-2 py-1 text-xs",
+                  ? "flex min-h-11 max-w-48 touch-manipulation flex-col justify-center rounded-xl px-3 py-1 text-sm active:bg-muted aria-busy:animate-pulse aria-busy:bg-muted"
+                  : "flex w-full items-center gap-2 rounded px-2 py-1 text-xs disabled:opacity-60",
+                hotbar && blocked !== null && "opacity-60",
                 hotbar && roll.attackAbilityId && "border-primary/50",
               )}
             >
@@ -94,7 +98,7 @@ export function CharacterRollButtons({
                   hotbar && "text-xs",
                 )}
               >
-                {roller.rolling === roll.key
+                {roller.rolling === roll.key && !hotbar
                   ? "Rolling…"
                   : !onAttack && blocked
                     ? blocked
@@ -138,7 +142,13 @@ export function RollFeedback({
         // made from a character reads exactly like one made from the roller —
         // including the Game Master's discrepancy note, which is deliberately
         // never shown to the player rolling (spec 028 FR-067).
-        <div data-testid={`${testIdPrefix}-roll-result`}>
+        <div
+          className="flex flex-wrap items-baseline gap-x-2"
+          data-testid={`${testIdPrefix}-roll-result`}
+        >
+          {roller.resultLabel ? (
+            <span className="text-sm font-medium">{roller.resultLabel}</span>
+          ) : null}
           <RollResult resolution={roller.result} />
         </div>
       ) : null}

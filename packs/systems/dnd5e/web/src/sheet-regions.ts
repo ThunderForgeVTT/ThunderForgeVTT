@@ -195,7 +195,7 @@ export const DND5E_SHEET_REGIONS: readonly SheetRegion[] = [
     kind: "skills",
     title: "Skills",
     blurb:
-      "Tick a proficiency and the bonus updates. Roll from the checks below.",
+      "Tap a skill to roll it. Edit to tick proficiencies; the bonus follows.",
     span: 2,
   },
   {

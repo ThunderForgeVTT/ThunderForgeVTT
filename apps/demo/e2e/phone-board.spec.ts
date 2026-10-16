@@ -144,6 +144,23 @@ test("a player plays from a phone", async ({ browser, baseURL }) => {
     await test.step("Dice holds the roller; Sheet holds my character", async () => {
       await page.getByTestId("phone-row-dice").click();
       await expect(sheet.getByTestId("dice-roller-panel")).toBeVisible();
+
+      // One tap per die, all seven on one thumb-sized row.
+      const quick = sheet.getByRole("group", { name: "Quick roll" });
+      const boxes = await quick
+        .getByRole("button")
+        .evaluateAll((els) => els.map((el) => el.getBoundingClientRect()));
+      expect(boxes).toHaveLength(7);
+      expect(new Set(boxes.map((box) => Math.round(box.top))).size).toBe(1);
+      for (const box of boxes) expect(box.height).toBeGreaterThanOrEqual(44);
+      const diceResult = sheet.getByTestId("dice-roll-result");
+      await sheet.getByTestId("dice-quick-d6").click();
+      await expect(diceResult).toContainText("1d6", { timeout: 15_000 });
+      await sheet.getByTestId("dice-quick-coin").click();
+      await expect(sheet.getByTestId("dice-formula-input")).toHaveValue("1dc");
+      await expect(diceResult).toBeVisible({ timeout: 15_000 });
+      await expect(sheet.getByTestId("dice-roll-error")).toHaveCount(0);
+
       await page.getByTestId("phone-row-sheet").click();
       await expect(sheet.getByTestId("in-pane-character-sheet")).toBeVisible();
       await expect(sheet.getByTestId("in-pane-sheet-dismiss")).toHaveCount(0);
@@ -179,8 +196,17 @@ test("a player plays from a phone", async ({ browser, baseURL }) => {
       // sheet scrolled away from.
       await expect(result).toBeInViewport();
 
+      await expect(result).toContainText("Perception");
+
+      // The last answer stays until the next lands, named, so the pinned
+      // top never collapses between taps.
       await body.getByTestId("dnd5e-roll-save-dexterity").click();
-      await expect(result).toBeVisible({ timeout: 15_000 });
+      await expect(result).toContainText("Dexterity save", { timeout: 15_000 });
+
+      // An attack from the hot bar opens where it was tapped, not at the
+      // foot of the sheet (the owner's T017 "long sword no worky").
+      await hotbar.locator('[data-attack="true"]').first().click();
+      await expect(sheet.getByTestId("attack-flow")).toBeInViewport();
 
       const edit = sheet.getByTestId("in-pane-sheet-edit");
       await edit.click();
