@@ -42,7 +42,7 @@
 
 ## Phase 6: Demo notice (US6)
 
-- [ ] T015 [US6] Collapsible pill below `sm`, and its e2e (SC-007).
+- [x] T015 [US6] Collapsible pill below `sm`, and its e2e (SC-007).
 
 ## Phase 7: Review
 
