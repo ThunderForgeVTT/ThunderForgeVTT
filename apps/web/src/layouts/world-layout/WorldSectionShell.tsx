@@ -22,12 +22,8 @@ export interface WorldSectionShellProps {
  * sidebar's category list or duplicated per-page) so every screen gets
  * exactly one, in the same place.
  *
- * Width is deliberately fluid rather than the app's usual `Container`
- * (max-w-[1160px]) — these are information-dense hub pages (catalogs, a
- * Markdown editor) sitting behind a fixed-width sidebar, so a 1160px cap
- * left a lot of dead space on wide monitors. `max-w-[1800px]` still caps
- * line length on ultrawide screens; `w-full` lets it shrink freely below
- * that on anything smaller. Play's own full-screen canvas is unrelated
+ * Width and gutter match `Container` (spec 100 US4): `--page-max` caps the
+ * page on ultrawide screens, `w-full` lets it shrink freely below that. Play's own full-screen canvas is unrelated
  * chrome and isn't wrapped by this component.
  */
 export function WorldSectionShell({
@@ -39,7 +35,7 @@ export function WorldSectionShell({
   return (
     <WorldAppearance worldId={worldId}>
       <div
-        className="mx-auto grid w-full max-w-[1800px] gap-4 p-4 sm:p-6 lg:p-8"
+        className="mx-auto grid w-full max-w-(--page-max) gap-4 p-4 sm:p-6 lg:p-8"
         data-testid="world-section-shell"
       >
         <div className="flex justify-end">

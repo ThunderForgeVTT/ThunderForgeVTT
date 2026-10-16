@@ -78,7 +78,7 @@ export function AppHeader({ brandHref, navItems }: AppHeaderProps) {
 
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur-sm">
-      <div className="mx-auto flex min-h-20 w-[calc(100%-2rem)] max-w-[1160px] flex-wrap items-center justify-between gap-4 py-3 md:flex-nowrap md:py-0">
+      <div className="mx-auto flex min-h-20 w-full max-w-(--page-max) px-4 sm:px-6 lg:px-8 flex-wrap items-center justify-between gap-4 py-3 md:flex-nowrap md:py-0">
         <NavLink
           to={brandHref}
           className="inline-flex min-w-0 items-center gap-3"

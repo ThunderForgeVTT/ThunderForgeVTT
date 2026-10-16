@@ -51,7 +51,7 @@
 ## Width (US4)
 
 - `apps/web/src/styles/globals.css` (`@theme`): `--breakpoint-3xl: 120rem`,
-  `--breakpoint-4xl: 160rem`, and a `--page-max: 150rem` token.
+  `--breakpoint-4xl: 160rem`, and a `--page-max: 165rem` token.
 - `Container`, `AppHeader`, the footer, `WorldSectionShell`,
   `AdminSectionShell`, `ActorDetailPage` use `max-w-(--page-max)` and the
   same gutter. `Container narrow` keeps 780px.

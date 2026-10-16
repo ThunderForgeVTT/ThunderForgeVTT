@@ -442,7 +442,7 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
           Column A is who the character is, B the sheet, C the rolls and the
           Game Master's switches; between 1024 and 1535 px, C sits under A. */}
       <div
-        className="mx-auto grid w-full max-w-[1800px] gap-6 px-4 py-6 sm:px-6 lg:py-10"
+        className="mx-auto grid w-full max-w-(--page-max) gap-6 px-4 py-6 sm:px-6 lg:px-8 lg:py-10"
         data-testid="actor-view"
       >
         <Button

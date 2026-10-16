@@ -104,7 +104,7 @@ export function SceneStrip({
           ) : null}
         </div>
       ) : (
-        <ol className="grid grid-cols-[repeat(auto-fill,minmax(min(16rem,100%),1fr))] gap-4">
+        <ol className="grid auto-grid gap-4">
           {cards.map((scene) => {
             const isActive = scene.sceneId === activeSceneId;
             const picture = pictureOf(scene);

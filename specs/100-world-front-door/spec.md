@@ -120,7 +120,7 @@ content, not margins.
 
 **Acceptance**:
 1. The app header, footer and world pages share one width rule: fluid
-   with a gutter, capped at 2400px. The header lines up with the content
+   with a gutter, capped at 2640px. The header lines up with the content
    beneath it.
 2. Card grids (players, scenes, compendium lists, the overview) fill rows
    by available width: about 20rem per card, as many as fit.
@@ -176,7 +176,7 @@ and identity in a rail, and the system sheet across the rest of the page.
   `backgroundUrl`, lazy-loaded. A scene without either shows its name on
   a plain tile. A scene with a `backgroundCredit` shows the author and
   licence on its card (the example maps are CC BY-SA 4.0).
-- **FR-006**: One layout width rule (`--page-max: 2400px` and a gutter)
+- **FR-006**: One layout width rule (`--page-max: 2640px` and a gutter)
   replaces the 1160px `Container` cap and the 1800px world/admin shell
   caps. `Container narrow` (780px) is unchanged for forms and prose.
 - **FR-007**: Tailwind's theme gains `3xl` (1920px) and `4xl` (2560px)

@@ -280,10 +280,7 @@ export function PlayersPage({ worldId, isGm }: PlayersPageProps) {
         </p>
       ) : null}
 
-      <div
-        className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3"
-        data-testid="players-list"
-      >
+      <div className="grid auto-grid gap-3" data-testid="players-list">
         {visibleMembers.map((member) => {
           const standing = describeStanding(member);
           const isYou = member.userId === user?.id;

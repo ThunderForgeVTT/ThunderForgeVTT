@@ -19,6 +19,24 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Spec 100 US4: pages grow to 2640px, so ultrawide screens get two more
+ * steps to lay out on. */
+@theme {
+    --breakpoint-3xl: 120rem;
+    --breakpoint-4xl: 160rem;
+}
+
+/* The one page width. A variable rather than a theme size, so a caller's
+ * `max-w-2xl` merges over `max-w-(--page-max)` in `cn`. */
+:root {
+    --page-max: 165rem;
+}
+
+/* Cards that fill the row: as many 20rem columns as fit, one on a phone. */
+@utility auto-grid {
+    grid-template-columns: repeat(auto-fill, minmax(min(20rem, 100%), 1fr));
+}
+
 @theme inline {
     --font-heading: var(--font-sans);
     --font-sans: 'Geist Variable', sans-serif;

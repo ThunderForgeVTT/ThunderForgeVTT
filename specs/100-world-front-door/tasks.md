@@ -25,11 +25,11 @@
 
 ## Phase 4: Width (US4)
 
-- [ ] T009 [US4] Breakpoints, `--page-max`, and the shared width on the
+- [x] T009 [US4] Breakpoints, `--page-max`, and the shared width on the
   header, footer, `Container` and the shells.
-- [ ] T010 [US4] `AutoGrid` on players, scenes, compendium and overview;
+- [x] T010 [US4] `auto-grid` on players, scenes, compendium and overview;
   prose capped at 75ch.
-- [ ] T011 [US4] e2e at three widths (SC-005).
+- [x] T011 [US4] e2e at three widths (SC-005).
 
 ## Phase 5: The character page (US5)
 

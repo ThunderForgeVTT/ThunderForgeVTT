@@ -25,6 +25,19 @@
 .lore-markdown {
   @apply leading-relaxed;
 
+  // Spec 100 US4: the page grows to 2640px; a line of text should not.
+  // Tables, code and pictures keep the full width.
+  > p,
+  > ul,
+  > ol,
+  > blockquote,
+  > h1,
+  > h2,
+  > h3,
+  > h4 {
+    max-width: 75ch;
+  }
+
   > * + * {
     @apply mt-3;
   }

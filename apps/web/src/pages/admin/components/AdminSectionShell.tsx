@@ -14,13 +14,11 @@ export interface AdminSectionShellProps {
  * would mean untangling that first. Wrapping is enough for the nav to be
  * present on every section, which is the whole complaint.
  *
- * Width matches `WorldSectionShell` rather than the app's `Container`
- * (max-w-[1160px]) — these pages sit behind a fixed-width rail and are
- * dense (metric grids, provider forms, a disk chart).
+ * Width matches `WorldSectionShell` and `Container`: `--page-max`.
  */
 export function AdminSectionShell({ children }: AdminSectionShellProps) {
   return (
-    <div className="mx-auto grid w-full max-w-[1800px] gap-4 p-4 sm:p-6 lg:p-8">
+    <div className="mx-auto grid w-full max-w-(--page-max) gap-4 p-4 sm:p-6 lg:p-8">
       {/* Stacked on a narrow screen, side by side from `lg`.
           A 14rem rail beside the content leaves about 95px for the content on
           a 375px phone, which is not a narrow column — it is a page that

@@ -4,7 +4,7 @@ import { registerAndCreateWorld } from "./fixtures/helpers";
 /**
  * Spec 088 US4 (SC-004, FR-033 to FR-036, contracts/layouts.md): the world
  * page uses the width it has. One column on a phone, the party and the notes
- * side by side from 1280 px (spec 100 US3.3), the content capped at 1800 px
+ * side by side from 1280 px (spec 100 US3.3), the content capped at 2640 px
  * and centred, and no sideways
  * scroll from 320 px to 3840 px. The Players card counts the members and the
  * open links, and points to the players page. The actor view's half is
@@ -30,11 +30,11 @@ const WIDTHS: { width: number; columns: number; capped: boolean }[] = [
   { width: 320, columns: 1, capped: false },
   { width: 375, columns: 1, capped: false },
   { width: 1280, columns: 2, capped: false },
-  { width: 2560, columns: 2, capped: true },
+  { width: 2560, columns: 2, capped: false },
   { width: 3840, columns: 2, capped: true },
 ];
 
-test("the world page takes one or two columns, capped at 1800 px, with a Players card", async ({
+test("the world page takes one or two columns, capped at 2640 px, with a Players card", async ({
   page,
 }) => {
   test.setTimeout(120_000);
@@ -52,7 +52,7 @@ test("the world page takes one or two columns, capped at 1800 px, with a Players
       if (capped) {
         const box = await page.getByTestId("world-section-shell").boundingBox();
         expect(box).not.toBeNull();
-        expect(Math.abs(box!.width - 1800)).toBeLessThanOrEqual(1);
+        expect(Math.abs(box!.width - 2640)).toBeLessThanOrEqual(1);
       }
     });
   }

@@ -174,7 +174,7 @@ export function PartyStrip({
                 : "No players yet."}
             </p>
           ) : (
-            <ul className="grid grid-cols-[repeat(auto-fill,minmax(min(14rem,100%),1fr))] gap-3">
+            <ul className="grid auto-grid gap-3">
               {current.seats.map((seat) => (
                 <SeatCard
                   key={seat.key}
