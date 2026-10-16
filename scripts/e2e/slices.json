@@ -1131,9 +1131,27 @@
         "world-overview.spec.ts",
         "live-sync.spec.ts",
         "demo-first-session.spec.ts",
-        "world-base-map.spec.ts"
+        "world-base-map.spec.ts",
+        "world-navigation.spec.ts"
       ],
-      "neighbours": [],
+      "neighbours": [
+        {
+          "spec": "actor-claim.spec.ts",
+          "seam": "the overview's claim gate remembers a cleared check (spec 101)"
+        },
+        {
+          "spec": "players-section.spec.ts",
+          "seam": "a world's members and roles are shared across its pages (spec 101)"
+        },
+        {
+          "spec": "play-pause.spec.ts",
+          "seam": "the paused banner reads the shared play state (spec 101)"
+        },
+        {
+          "spec": "gm-staging-page.spec.ts",
+          "seam": "the overview renders from the remembered world (spec 101)"
+        }
+      ],
       "paths": [
         "apps/web/src/api/{world,worldContent,worldStatistics,worldMembers,reconcile,baseMaps}.ts",
         "apps/web/src/appearance/**",

@@ -67,30 +67,34 @@ Paths are relative to the repo root; `web/` means `apps/web/src/`.
   after each click assert `page-loader` never becomes visible (watch with
   a `MutationObserver` set up before the click, not a single poll) and the
   page's heading shows. See it fail.
-- [ ] T009 [P] [US1] `web/pages/world/players/PlayersRoutePage.tsx`: read
+- [x] T009 [P] [US1] `web/pages/world/players/PlayersRoutePage.tsx`: read
   `useKnownWorld(id)`; render the loader only when `!known`; drop its own
   `getWorld` effect and `useResetOnChange`.
-- [ ] T010 [P] [US1] Same change in `web/pages/world/scenes/ScenesRoutePage.tsx`.
-- [ ] T011 [P] [US1] Same change in `web/pages/world/WorldCompendiumRoutePage.tsx`.
-- [ ] T012 [P] [US1] Same change in `web/pages/world/scenes/SceneDetailRoutePage.tsx`
+- [x] T010 [P] [US1] Same change in `web/pages/world/scenes/ScenesRoutePage.tsx`.
+- [x] T011 [P] [US1] Same change in `web/pages/world/WorldCompendiumRoutePage.tsx`.
+- [x] T012 [P] [US1] Same change in `web/pages/world/scenes/SceneDetailRoutePage.tsx`
   (the scene's own read and its loader stay; only the world's moves).
-- [ ] T013 [US1] `web/pages/world/settings/WorldSystemSettingsPage.tsx`:
+- [x] T013 [US1] `web/pages/world/settings/WorldSystemSettingsPage.tsx`:
   world from `useKnownWorld`; every `setWorld(updated)` after a save
   (`updateWorldGameSystem`, `updateWorldDefaultSceneGridType`, the
   appearance card's callback) becomes `remember(worldId, { world: updated })`
   (FR-004).
-- [ ] T014 [US1] `web/pages/world/overview/WorldOverviewPage.tsx`: world
+- [x] T014 [US1] `web/pages/world/overview/WorldOverviewPage.tsx`: world
   from `useKnownWorld`; keep `status` for its own errors; `setNotes`
   remembers the edited world; the loader condition uses `!known` (role and
   claim parts follow in US2 and US3).
-- [ ] T015 [US1] `web/appearance/WorldAppearance.tsx`: read
+- [x] T015 [US1] `web/appearance/WorldAppearance.tsx`: read
   `interfacePackId` from the known world when present, so the shell's
   appearance and the page share one `getWorld` (keep the appearance event
   write).
-- [ ] T016 [US1] Add to `world-navigation.spec.ts`: the GM renames the
+- [x] T016 [US1] Add to `world-navigation.spec.ts`: the GM renames the
   world on one page and the next page shows the new name; a world deleted
   in another context shows the not-found state on the next page, not the
   remembered one. T008 and these pass.
+  *Done as:* there is no rename in the app or the API, so the "changed
+  elsewhere" case changes the session notes through GraphQL and the
+  overview shows them; a grid-type save on settings survives a round trip
+  through Scenes (FR-004).
 
 **Checkpoint**: US1 stands alone; ship-able with the spinner gone.
 

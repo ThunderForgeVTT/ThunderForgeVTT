@@ -6,7 +6,6 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { useResetOnChange } from "@/hooks/useResetOnChange";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   getGameSystemManifest,
@@ -43,6 +42,10 @@ import { IN_DEMO } from "@/lib/demoBuild";
 import type { SystemManifest } from "@/types/systemManifest";
 import { resolvePanel } from "@/panels/systemPanels";
 import { useWorldRole } from "@/hooks/useWorldRole";
+import {
+  useKnownWorld,
+  useRememberWorldChrome,
+} from "@/hooks/world-chrome-context";
 import { WorldSectionShell } from "@/layouts/world-layout/WorldSectionShell";
 import { ActiveSystemCard } from "@/pages/world/settings/ActiveSystemCard";
 import { AuthoringToolGrantsCard } from "@/pages/world/settings/AuthoringToolGrantsCard";
@@ -134,8 +137,12 @@ function SettingsSection({
 export default function WorldSystemSettingsPage() {
   const { id: worldId = "" } = useParams();
   const navigate = useNavigate();
-  const [world, setWorld] = useState<WorldRecord | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  // Spec 101: the world as last known; a save writes it back (FR-004), so
+  // every page of the world shows what was just saved.
+  const { world, known } = useKnownWorld(worldId);
+  const remember = useRememberWorldChrome();
+  const setWorld = (updated: WorldRecord | null) =>
+    remember(worldId, { world: updated });
   const [activeManifest, setActiveManifest] = useState<SystemManifest | null>(
     null,
   );
@@ -159,13 +166,6 @@ export default function WorldSystemSettingsPage() {
   const [status, setStatus] = useState<string | null>(null);
   const { isGm, role, loading: roleLoading } = useWorldRole(worldId, world);
 
-  // Reset during render rather than at the top of the effect below: this
-  // is state derived from the arguments, and doing it in the effect commits
-  // one render pairing the new key with the previous key's data.
-  useResetOnChange(worldId, () => {
-    setIsLoading(true);
-  });
-
   useEffect(() => {
     let live = true;
     listGameSystems()
@@ -180,36 +180,19 @@ export default function WorldSystemSettingsPage() {
     };
   }, []);
 
+  const gameSystemId = world?.gameSystemId ?? null;
   useEffect(() => {
+    if (!gameSystemId) return;
     let active = true;
-
-    getWorld(worldId)
-      .then((worldResult) => {
-        if (!active) {
-          return;
-        }
-        setWorld(worldResult);
-        if (worldResult?.gameSystemId) {
-          return getGameSystemManifest(worldResult.gameSystemId).then(
-            (manifest) => {
-              if (active) {
-                setActiveManifest(manifest);
-              }
-            },
-          );
-        }
-        return undefined;
+    getGameSystemManifest(gameSystemId)
+      .then((manifest) => {
+        if (active) setActiveManifest(manifest);
       })
-      .finally(() => {
-        if (active) {
-          setIsLoading(false);
-        }
-      });
-
+      .catch(() => undefined);
     return () => {
       active = false;
     };
-  }, [worldId]);
+  }, [gameSystemId]);
 
   const handlePickSystem = async (systemId: string) => {
     setStatus(null);
@@ -300,7 +283,7 @@ export default function WorldSystemSettingsPage() {
 
   // Waits for the role as well as the world: deciding before the members
   // arrive would show a Game Master the Player's GIF for a moment.
-  if (isLoading || roleLoading) {
+  if (!known || roleLoading) {
     return <Loader fullScreen label="Loading system settings" />;
   }
 
@@ -607,9 +590,7 @@ export default function WorldSystemSettingsPage() {
               gameSystemId={world?.gameSystemId ?? null}
               isGm={isGm}
               onChanged={(interfacePackId) =>
-                setWorld((current) =>
-                  current ? { ...current, interfacePackId } : current,
-                )
+                world && setWorld({ ...world, interfacePackId })
               }
             />
 

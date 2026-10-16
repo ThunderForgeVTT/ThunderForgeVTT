@@ -18,10 +18,10 @@ describe("patchChrome", () => {
 
   it("keeps the other keys and the other worlds", () => {
     const current = { w1: { resumeScene: "Crypt" }, w2: { resumeScene: null } };
-    const next = patchChrome(current, "w1", { interfacePackId: "gothic" });
+    const next = patchChrome(current, "w1", { claimCleared: true });
     expect(next.w1).toEqual({
       resumeScene: "Crypt",
-      interfacePackId: "gothic",
+      claimCleared: true,
     });
     expect(next.w2).toBe(current.w2);
   });

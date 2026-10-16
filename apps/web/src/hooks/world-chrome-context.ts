@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 
 import { getWorld } from "@/api/world";
 import type { WorldPlayState } from "@/api/playPause";
@@ -22,8 +22,6 @@ import { isRefusal } from "./world-chrome-store";
 export interface WorldChrome {
   /** The active scene's name; `null` when none is active or it is hidden. */
   resumeScene: string | null;
-  /** The world's interface pack; `null` for the base look. */
-  interfacePackId: string | null;
   /** The world; `null` when it is missing or refused to this person. */
   world: WorldRecord | null;
   /** The roster, sorted by role, replaced whole on every answer. */
@@ -98,8 +96,26 @@ export interface KnownWorld {
   known: boolean;
 }
 
-/** The world as last known, shown at once and refreshed on every visit. */
+/**
+ * The world as last known, shown at once and refreshed on every visit. A
+ * first read that got no answer at all still ends the wait: the page shows
+ * without its world, as it did before the store, rather than load forever.
+ */
 export function useKnownWorld(worldId: string): KnownWorld {
-  const world = useWorldChrome(worldId, "world", readWorld);
-  return { world: world ?? null, known: world !== undefined };
+  const { chrome, refresh } = useStore();
+  const [unanswered, setUnanswered] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    refresh(worldId, "world", readWorld).catch(() => {
+      if (active) setUnanswered(worldId);
+    });
+    return () => {
+      active = false;
+    };
+  }, [worldId, refresh]);
+  const world = chrome[worldId]?.world;
+  return {
+    world: world ?? null,
+    known: world !== undefined || unanswered === worldId,
+  };
 }

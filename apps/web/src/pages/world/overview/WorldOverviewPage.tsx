@@ -1,6 +1,6 @@
-import { createElement, useEffect, useState } from "react";
+import { createElement, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { deleteWorld, getWorld } from "@/api/world";
+import { deleteWorld } from "@/api/world";
 import {
   interfacePackLabel,
   useInterfacePacks,
@@ -18,6 +18,10 @@ import { SessionSetupInviteLink } from "@/components/world/SessionSetupInviteLin
 import { useActorClaimGate } from "@/hooks/useActorClaimGate";
 import { useAuth } from "@/hooks/useAuth";
 import { useWorldRole } from "@/hooks/useWorldRole";
+import {
+  useKnownWorld,
+  useRememberWorldChrome,
+} from "@/hooks/world-chrome-context";
 import { WorldSectionShell } from "@/layouts/world-layout/WorldSectionShell";
 import { IN_DEMO } from "@/lib/demoBuild";
 import { reachedThroughAdminAccess } from "@/pages/world/adminAccess";
@@ -27,7 +31,6 @@ import { SceneStrip } from "@/pages/world/overview/SceneStrip";
 import { useSceneHeadlines } from "@/pages/world/overview/sceneStrip";
 import { resolvePanel } from "@/panels/systemPanels";
 import type { SeoConfig } from "@/types/seo";
-import type { WorldRecord } from "@/types/world";
 
 export const worldOverviewPageSeo: SeoConfig = {
   title: "World overview",
@@ -60,42 +63,17 @@ export default function WorldOverviewPage() {
   const navigate = useNavigate();
   const { id = "" } = useParams();
   const { isAdmin, user } = useAuth();
-  const [state, setState] = useState<{
-    requestedId: string;
-    world: WorldRecord | null;
-    status: string | null;
-    isLoading: boolean;
-  }>({ requestedId: id, world: null, status: null, isLoading: true });
+  // Spec 101 FR-001: the world as last known, shown at once on the way
+  // back from another of its pages and refreshed behind it.
+  const { world, known } = useKnownWorld(id);
+  const remember = useRememberWorldChrome();
+  // This page's own errors (deleting), kept with the world they belong to.
+  const [failure, setFailure] = useState<{ id: string; text: string } | null>(
+    null,
+  );
+  const status = failure?.id === id ? failure.text : null;
   const [isDeleting, setIsDeleting] = useState(false);
   const packs = useInterfacePacks();
-
-  useEffect(() => {
-    let active = true;
-    void getWorld(id)
-      .then((world) => {
-        if (active) {
-          setState({ requestedId: id, world, status: null, isLoading: false });
-        }
-      })
-      .catch((error) => {
-        if (active) {
-          setState({
-            requestedId: id,
-            world: null,
-            status:
-              error instanceof Error ? error.message : "Failed to load world.",
-            isLoading: false,
-          });
-        }
-      });
-    return () => {
-      active = false;
-    };
-  }, [id]);
-
-  const isLoading = state.requestedId !== id || state.isLoading;
-  const world = state.requestedId === id ? state.world : null;
-  const status = state.requestedId === id ? state.status : null;
 
   const { cleared: claimGateCleared, lookingAround } = useActorClaimGate(
     id,
@@ -113,12 +91,9 @@ export default function WorldOverviewPage() {
     "world-staging",
   );
 
-  const setNotes = (notes: string) =>
-    setState((current) =>
-      current.world
-        ? { ...current, world: { ...current.world, sessionNotes: notes } }
-        : current,
-    );
+  const setNotes = (notes: string) => {
+    if (world) remember(id, { world: { ...world, sessionNotes: notes } });
+  };
 
   const handleDelete = async () => {
     if (!world || isDeleting) {
@@ -128,21 +103,22 @@ export default function WorldOverviewPage() {
       return;
     }
     setIsDeleting(true);
-    setState((current) => ({ ...current, status: null }));
+    setFailure(null);
     try {
       await deleteWorld(world.id);
+      remember(id, { world: null });
       void navigate("/worlds");
     } catch (error) {
-      setState((current) => ({
-        ...current,
-        status:
+      setFailure({
+        id,
+        text:
           error instanceof Error ? error.message : "Failed to delete world.",
-      }));
+      });
       setIsDeleting(false);
     }
   };
 
-  if (isLoading || roleLoading || (world && !claimGateCleared)) {
+  if (!known || roleLoading || (world && !claimGateCleared)) {
     return <Loader fullScreen label="Opening the world" />;
   }
 
