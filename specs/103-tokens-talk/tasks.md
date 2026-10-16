@@ -27,13 +27,13 @@ description: "Task list for spec 103, Tokens Talk"
 
 ### Server: the speaker columns and rule
 
-- [ ] T003 Add migration crates/thunderforge-server/migrations/2026-10-16-120000-0000_speaker_token/{up,down}.sql. It adds `speaker_token_id UUID NULL REFERENCES tokens(id) ON DELETE SET NULL` and `speaker_label TEXT NULL` to `world_chat_messages` and `world_roll_records`; down drops them. Update crates/thunderforge-server/src/schema.rs and `ChatMessage`/`NewChatMessage`/`RollRecord` (and its insertable) in crates/thunderforge-server/src/models.rs.
-- [ ] T004 Write the failing tests first in crates/thunderforge-server/src/graphql/speaker_tests.rs:
+- [X] T003 Add migration crates/thunderforge-server/migrations/2026-10-16-120000-0000_speaker_token/{up,down}.sql. It adds `speaker_token_id UUID NULL REFERENCES tokens(id) ON DELETE SET NULL` and `speaker_label TEXT NULL` to `world_chat_messages` and `world_roll_records`; down drops them. Update crates/thunderforge-server/src/schema.rs and `ChatMessage`/`NewChatMessage`/`RollRecord` (and its insertable) in crates/thunderforge-server/src/models.rs.
+- [X] T004 Write the failing tests first in crates/thunderforge-server/src/graphql/speaker_tests.rs:
   - the GM may speak as any token of the world
   - a player may speak as a token `controllers::may_move` allows, and not as another's token, a token of another world, or a token off the given `sceneId`
   - a nonexistent id gives the same FORBIDDEN as a forbidden one
   - `speaker_label_for(viewer)` returns the real name to the GM, and "Someone" to a player when `npc_visibility::player_may_read_token_name` is false
-- [ ] T005 Implement crates/thunderforge-server/src/graphql/speaker.rs, registered in graphql/mod.rs:
+- [X] T005 Implement crates/thunderforge-server/src/graphql/speaker.rs, registered in graphql/mod.rs:
   - `resolve_speaker(conn, world_id, scene_id: Option<Uuid>, user_id, token_id) -> Result<(Uuid, String)>` returns the token id and its real name, or FORBIDDEN "You can't speak as that token". It uses `crate::combat::controllers::may_move` and `is_dm_of_world`.
   - `speaker_label_for(conn, is_gm, token_id, stored_label)` applies research R5.
   - T004 must pass.

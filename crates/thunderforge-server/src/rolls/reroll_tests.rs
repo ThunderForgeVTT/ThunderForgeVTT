@@ -26,6 +26,8 @@ fn roll(maker: Uuid, kind: &str) -> RollRecord {
         facets: Vec::new(),
         reroll_of: None,
         reroll_spent: None,
+        speaker_token_id: None,
+        speaker_label: None,
     }
 }
 

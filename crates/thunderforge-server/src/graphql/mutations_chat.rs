@@ -152,6 +152,8 @@ pub async fn send_chat_message_impl(
             author_label,
             body,
             gm_only: wants_gm_only,
+            speaker_token_id: None,
+            speaker_label: None,
         };
 
         let message = diesel::insert_into(world_chat_messages::table)

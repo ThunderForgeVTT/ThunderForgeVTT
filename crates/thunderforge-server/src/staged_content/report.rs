@@ -169,6 +169,8 @@ pub fn record_attempt(
             author_label: "ThunderForge".into(),
             body: report_sentence(&player, &piece.name, &character, now),
             gm_only: true,
+            speaker_token_id: None,
+            speaker_label: None,
         };
         diesel::insert_into(world_chat_messages::table)
             .values(&message)
