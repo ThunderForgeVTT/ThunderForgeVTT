@@ -89,18 +89,12 @@ export interface InPaneCharacterSheetProps {
    */
   onDismiss?: () => void;
   /**
-   * `phone` (spec 102) pins the name and a hot bar of rolls, actions first,
-   * above the sheet, and lets the sheet run at full size in the board
-   * sheet's own scroll instead of a cramped box of its own.
+   * `phone` (spec 102) pins the name and the last roll's result above the
+   * sheet, gives the rolls under it thumb-sized rows, and lets the sheet run
+   * at full size in the board sheet's own scroll instead of a cramped box.
    */
   layout?: "dock" | "phone";
 }
-
-/** Actions (an ability's attack, damage, healing) lead the hot bar. */
-const actionsFirst = (rolls: CharacterRoll[]) => [
-  ...rolls.filter((roll) => roll.key.startsWith("ability-")),
-  ...rolls.filter((roll) => !roll.key.startsWith("ability-")),
-];
 
 export function InPaneCharacterSheet({
   worldId,
@@ -118,6 +112,7 @@ export function InPaneCharacterSheet({
   const phone = layout === "phone";
   const mayEdit = mayEditActor(actor);
   const sheetRef = useRef<HTMLDivElement>(null);
+  const attackRef = useRef<HTMLDivElement>(null);
   const sheet = resolveActorSheet(actor.gameSystemId);
 
   // Spec 046: an attack is made from this character's token on the scene, at
@@ -132,15 +127,15 @@ export function InPaneCharacterSheet({
     );
   }, [sceneTokens, actor.id, user?.id]);
 
-  // The phone's sheet may be scrolled deep into the skills; bring the top,
-  // and the attack under it, back into view.
+  // On the phone the attack opens under a full-size sheet, below the pinned
+  // top; bring it into view or the tap reads as doing nothing.
   useEffect(() => {
     if (phone && attacking)
-      sheetRef.current?.scrollIntoView({ block: "start" });
+      attackRef.current?.scrollIntoView({ block: "nearest" });
   }, [phone, attacking]);
 
   const derived = useCharacterRolls(worldId, actor);
-  const rolls = phone ? actionsFirst(derived) : derived;
+  const rolls = derived;
   const showRolls = !(sheet && rolls.length === 0);
   const showFeedback =
     rolls.length > 0 || roller.result !== null || roller.rollError !== null;
@@ -153,12 +148,7 @@ export function InPaneCharacterSheet({
   */
   const rollSection = showRolls ? (
     <section className="grid gap-1.5" data-testid="in-pane-sheet-rolls">
-      <h3
-        className={cn(
-          "text-xs font-semibold tracking-widest text-muted-foreground uppercase",
-          phone && "sr-only",
-        )}
-      >
+      <h3 className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
         Rolls
       </h3>
       {rolls.length === 0 ? (
@@ -173,7 +163,7 @@ export function InPaneCharacterSheet({
           rolls={rolls}
           roller={roller}
           testIdPrefix="in-pane"
-          layout={phone ? "hotbar" : "list"}
+          touch={phone}
           onAttack={setAttacking}
           attackUnavailable={
             attackerToken
@@ -182,11 +172,11 @@ export function InPaneCharacterSheet({
           }
         />
       )}
-      {showFeedback ? (
+      {showFeedback && !phone ? (
         <RollFeedback roller={roller} testIdPrefix="in-pane" />
       ) : null}
     </section>
-  ) : showFeedback ? (
+  ) : showFeedback && !phone ? (
     <RollFeedback roller={roller} testIdPrefix="in-pane" />
   ) : null;
 
@@ -267,15 +257,16 @@ export function InPaneCharacterSheet({
             </button>
           ) : null}
         </header>
-        {phone ? rollSection : null}
+        {/*
+          The rolls themselves sit in their usual place under the sheet (the
+          owner's T017 call: a pinned bar of them crowded the sheet). Who sees
+          a roll and what it came to stay pinned, since a skill is tapped far
+          down the sheet.
+        */}
+        {phone && showFeedback ? (
+          <RollFeedback roller={roller} testIdPrefix="in-pane" />
+        ) : null}
       </div>
-
-      {/*
-        On the phone the attack opens right under the hot bar that started
-        it: at the foot of a full sheet it opened out of sight, and the tap
-        read as doing nothing.
-      */}
-      {phone ? attackFlow : null}
 
       {/*
         The pack's sheet was drawn for a page, not a 22rem column. Scaling its
@@ -330,9 +321,9 @@ export function InPaneCharacterSheet({
         </p>
       )}
 
-      {phone ? null : rollSection}
+      {rollSection}
 
-      {phone ? null : attackFlow}
+      {attackFlow ? <div ref={attackRef}>{attackFlow}</div> : null}
     </div>
   );
 }

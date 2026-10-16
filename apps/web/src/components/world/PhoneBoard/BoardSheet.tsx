@@ -17,6 +17,12 @@ export interface BoardSheetProps {
   size: SheetSize;
   onSizeChange: (size: SheetSize) => void;
   onClose: () => void;
+  /**
+   * The content scrolls itself and keeps something pinned below the scroll
+   * (Chat: the log above, the composer always at the foot). The sheet then
+   * holds a fixed height and does not scroll as a whole.
+   */
+  fill?: boolean;
   children: ReactNode;
 }
 
@@ -40,6 +46,7 @@ export function BoardSheet({
   title,
   icon,
   size,
+  fill = false,
   onSizeChange,
   onClose,
   children,
@@ -109,7 +116,9 @@ export function BoardSheet({
             "landscape:right-[calc(max(12px,env(safe-area-inset-right))+64px)] landscape:bottom-[max(8px,env(safe-area-inset-bottom))]",
             "duration-[180ms] data-[state=open]:animate-in data-[state=open]:slide-in-from-bottom data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom motion-reduce:animate-none",
             size === "half"
-              ? "max-h-[60dvh]"
+              ? fill
+                ? "h-[60dvh]"
+                : "max-h-[60dvh]"
               : "top-[max(8px,env(safe-area-inset-top))]",
           )}
         >
@@ -155,7 +164,14 @@ export function BoardSheet({
           </header>
           {/* min-h-0 lets a long panel scroll inside the sheet rather than
            * pushing the sheet past the viewport. */}
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
+          <div
+            className={cn(
+              "min-h-0 flex-1 p-4",
+              fill
+                ? "flex flex-col [&>*]:min-h-0 [&>*]:flex-1"
+                : "overflow-y-auto overscroll-contain",
+            )}
+          >
             {children}
           </div>
         </DialogPrimitive.Content>

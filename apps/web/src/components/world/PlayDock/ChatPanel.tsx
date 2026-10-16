@@ -179,6 +179,7 @@ export function ChatPanel({
       <div
         ref={scrollRef}
         className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1"
+        data-testid="chat-log"
       >
         {hasOlder ? (
           <Button

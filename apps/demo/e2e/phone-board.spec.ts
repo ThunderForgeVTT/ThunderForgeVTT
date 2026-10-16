@@ -161,25 +161,32 @@ test("a player plays from a phone", async ({ browser, baseURL }) => {
       await expect(diceResult).toBeVisible({ timeout: 15_000 });
       await expect(sheet.getByTestId("dice-roll-error")).toHaveCount(0);
 
+      // Closing the tray and opening it again keeps the formula and the
+      // answer (the owner's T017: a second tap made the roll vanish).
+      await page.getByTestId("phone-row-dice").click();
+      await expect(sheet).toHaveCount(0);
+      await page.getByTestId("phone-row-dice").click();
+      await expect(sheet.getByTestId("dice-formula-input")).toHaveValue("1dc");
+      await expect(sheet.getByTestId("dice-roll-result")).toBeVisible();
+
       await page.getByTestId("phone-row-sheet").click();
       await expect(sheet.getByTestId("in-pane-character-sheet")).toBeVisible();
       await expect(sheet.getByTestId("in-pane-sheet-dismiss")).toHaveCount(0);
     });
 
-    await test.step("Sheet leads with a hot bar and rolls what it shows", async () => {
-      // The owner's T017 try-out: actions before the scroll, and a sheet
-      // that is read and rolled from, with editing behind a toggle.
-      const hotbar = sheet.getByTestId("in-pane-roll-list");
-      await expect(hotbar).toHaveAttribute("data-layout", "hotbar");
+    await test.step("Sheet is rolled from where things are", async () => {
+      // The owner's T017 try-out: no pinned bar of rolls; abilities and
+      // weapons roll from their usual place, with editing behind a toggle.
+      const rollList = sheet.getByTestId("in-pane-roll-list");
       const body = sheet.getByTestId("in-pane-sheet-body");
       await expect(body.getByTestId("dnd5e-actor-sheet")).toBeVisible({
         timeout: 15_000,
       });
-      const [barBox, bodyBox] = await Promise.all([
-        hotbar.boundingBox(),
+      const [listBox, bodyBox] = await Promise.all([
+        rollList.boundingBox(),
         body.boundingBox(),
       ]);
-      expect(barBox!.y + barBox!.height).toBeLessThanOrEqual(bodyBox!.y);
+      expect(listBox!.y).toBeGreaterThanOrEqual(bodyBox!.y + bodyBox!.height);
       await expect(body).toHaveAttribute("data-editing", "false");
       await expect(body.getByTestId("dnd5e-score-strength-input")).toHaveCount(
         0,
@@ -192,8 +199,8 @@ test("a player plays from a phone", async ({ browser, baseURL }) => {
       await perception.click();
       const result = sheet.getByTestId("in-pane-roll-result");
       await expect(result).toBeVisible({ timeout: 15_000 });
-      // The answer is pinned with the hot bar, not left at the top of a
-      // sheet scrolled away from.
+      // The answer is pinned under the name, not left at the top of a sheet
+      // scrolled away from.
       await expect(result).toBeInViewport();
 
       await expect(result).toContainText("Perception");
@@ -203,9 +210,12 @@ test("a player plays from a phone", async ({ browser, baseURL }) => {
       await body.getByTestId("dnd5e-roll-save-dexterity").click();
       await expect(result).toContainText("Dexterity save", { timeout: 15_000 });
 
-      // An attack from the hot bar opens where it was tapped, not at the
-      // foot of the sheet (the owner's T017 "long sword no worky").
-      await hotbar.locator('[data-attack="true"]').first().click();
+      // An attack opens in view, not out of sight (the owner's T017 "long
+      // sword no worky").
+      const attack = rollList.locator('[data-attack="true"]').first();
+      await attack.scrollIntoViewIfNeeded();
+      expect((await attack.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      await attack.click();
       await expect(sheet.getByTestId("attack-flow")).toBeInViewport();
 
       const edit = sheet.getByTestId("in-pane-sheet-edit");
@@ -219,6 +229,22 @@ test("a player plays from a phone", async ({ browser, baseURL }) => {
       await expect(
         body.getByTestId("dnd5e-roll-skill-perception"),
       ).toBeVisible();
+    });
+
+    await test.step("Chat opens on the newest, composer in reach", async () => {
+      await page.getByTestId("phone-row-chat").click();
+      const log = sheet.getByTestId("chat-log");
+      // The rolls above landed in the log; it opens on the last of them.
+      await expect(log).toContainText("Dexterity save", { timeout: 15_000 });
+      await expect
+        .poll(() =>
+          log.evaluate(
+            (el) => el.scrollHeight - el.scrollTop - el.clientHeight,
+          ),
+        )
+        .toBeLessThanOrEqual(2);
+      await expect(sheet.getByTestId("chat-input")).toBeInViewport();
+      await expect(sheet.getByTestId("chat-send-button")).toBeInViewport();
     });
 
     await test.step("More offers only what a player may use", async () => {

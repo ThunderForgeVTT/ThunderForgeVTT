@@ -10,11 +10,8 @@ export interface CharacterRollButtonsProps {
   roller: CharacterRoller;
   /** `in-pane` in the play dock, `sheet` on the sheet page. */
   testIdPrefix: string;
-  /**
-   * `list` stacks the rolls; `hotbar` lays them in one row of thumb-sized
-   * chips that scrolls sideways, for the phone's sheet (spec 102).
-   */
-  layout?: "list" | "hotbar";
+  /** Thumb-sized rows, for the phone's sheet (spec 102). */
+  touch?: boolean;
   /**
    * Opens the attack flow for an attack entry. Left out where there is no
    * board to pick a target on, and the entry then says so (FR-014).
@@ -36,7 +33,7 @@ export function CharacterRollButtons({
   rolls,
   roller,
   testIdPrefix,
-  layout = "list",
+  touch = false,
   onAttack,
   attackUnavailable = null,
 }: CharacterRollButtonsProps) {
@@ -57,21 +54,12 @@ export function CharacterRollButtons({
     return attackUnavailable;
   };
 
-  const hotbar = layout === "hotbar";
   return (
-    <ul
-      className={
-        hotbar
-          ? "-mx-4 flex snap-x gap-2 overflow-x-auto overscroll-x-contain px-4 pb-1"
-          : "grid gap-1"
-      }
-      data-testid={`${testIdPrefix}-roll-list`}
-      data-layout={layout}
-    >
+    <ul className="grid gap-1" data-testid={`${testIdPrefix}-roll-list`}>
       {rolls.map((roll) => {
         const blocked = attackBlocked(roll);
         return (
-          <li key={roll.key} className={hotbar ? "shrink-0 snap-start" : ""}>
+          <li key={roll.key}>
             <button
               type="button"
               disabled={roller.rolling !== null || blocked !== null}
@@ -81,24 +69,15 @@ export function CharacterRollButtons({
               data-testid={`${testIdPrefix}-roll-${roll.key}`}
               data-attack={roll.attackAbilityId ? "true" : undefined}
               className={cn(
-                "border border-border text-left transition-colors hover:bg-muted",
-                // On the hot bar one roll in flight must not dim the whole row
-                // or change a chip's width: the bar is what the thumb is on.
-                hotbar
-                  ? "flex min-h-11 max-w-48 touch-manipulation flex-col justify-center rounded-xl px-3 py-1 text-sm active:bg-muted aria-busy:animate-pulse aria-busy:bg-muted"
-                  : "flex w-full items-center gap-2 rounded px-2 py-1 text-xs disabled:opacity-60",
-                hotbar && blocked !== null && "opacity-60",
-                hotbar && roll.attackAbilityId && "border-primary/50",
+                "flex w-full items-center gap-2 border border-border text-left transition-colors hover:bg-muted disabled:opacity-60",
+                touch
+                  ? "min-h-11 touch-manipulation rounded-lg px-3 text-sm active:bg-muted"
+                  : "rounded px-2 py-1 text-xs",
               )}
             >
               <span className="min-w-0 flex-1 truncate">{roll.label}</span>
-              <span
-                className={cn(
-                  "text-muted-foreground tabular-nums",
-                  hotbar && "text-xs",
-                )}
-              >
-                {roller.rolling === roll.key && !hotbar
+              <span className="text-muted-foreground tabular-nums">
+                {roller.rolling === roll.key
                   ? "Rolling…"
                   : !onAttack && blocked
                     ? blocked

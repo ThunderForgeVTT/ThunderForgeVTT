@@ -226,6 +226,7 @@ export default function PhoneBoard({
         size={size}
         onSizeChange={setSize}
         onClose={close}
+        fill={sheet?.id === "chat"}
       >
         {sheet?.body}
       </BoardSheet>

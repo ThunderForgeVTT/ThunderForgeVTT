@@ -56,6 +56,7 @@ import {
 } from "@/pages/world/gmTools";
 import { TokenPanel } from "@/components/TokenPanel";
 import { DiceRollerPanel } from "@/components/world/DiceRollerPanel/DiceRollerPanel";
+import { useDiceRoller } from "@/components/world/DiceRollerPanel/useDiceRoller";
 import { TokenStackPicker } from "@/components/canvas-tools/TokenStackPicker";
 import { SelectionCount } from "@/components/world/SelectionCount";
 import { SelectionBar } from "@/components/canvas-tools/SelectionBar";
@@ -513,12 +514,9 @@ export default function WorldPage() {
     tokens: allTokens,
     selectOne: facets.selection.selectOne,
   });
+  const diceRoller = useDiceRoller(id, isSceneOwner, engineReady);
   const dice = (
-    <DiceRollerPanel
-      worldId={id}
-      engineReady={engineReady}
-      isGameMaster={isSceneOwner}
-    />
+    <DiceRollerPanel roller={diceRoller} isGameMaster={isSceneOwner} />
   );
   // Filtered, not merely disabled: FR-047 says a tool a person may not use
   // is not offered. A greyed-out button still tells them the tool exists
