@@ -3379,6 +3379,16 @@ type GraphQLChatMessage {
 	body: String!
 	gmOnly: Boolean!
 	createdAt: NaiveDateTime!
+	"""
+	Spec 103: the token the line was said as; `None` when said as the
+	author.
+	"""
+	speakerTokenId: UUID
+	"""
+	Spec 103: that token's name, or "Someone" for a player who may not
+	read it (`speaker::speaker_label`).
+	"""
+	speakerLabel: String
 }
 
 type GraphQLChoiceOption {
@@ -6763,6 +6773,11 @@ input RollDiceInput {
 	Spec 081: what it was for, at most 80 characters.
 	"""
 	label: String
+	"""
+	Spec 103: the token the roll is made as; the roller's own, or any
+	token for the GM.
+	"""
+	speakerTokenId: UUID
 }
 
 """
@@ -6912,6 +6927,11 @@ input SendChatMessageInput {
 	something the sender believed was private.
 	"""
 	gmOnly: Boolean
+	"""
+	Spec 103: say it as this token. Verified like `gm_only`: a token the
+	sender may not speak as is refused, never dropped.
+	"""
+	speakerTokenId: UUID
 }
 
 input SetAbilityPermissionInput {
@@ -8239,6 +8259,14 @@ type WorldRoll {
 	RFC 3339; null when the roll cannot be rerolled at all.
 	"""
 	rerollUntil: String
+	"""
+	Spec 103: the token the roll was made as.
+	"""
+	speakerTokenId: UUID
+	"""
+	Spec 103: its name, or "Someone" where the viewer may not read it.
+	"""
+	speakerLabel: String
 }
 
 """

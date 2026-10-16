@@ -46,7 +46,7 @@ description: "Task list for spec 103, Tokens Talk"
   - `RollDiceInput.speakerTokenId` in crates/thunderforge-server/src/graphql/mutations_roll.rs (`roll_dice_impl` calls `resolve_speaker`)
   - output fields `speakerTokenId`/`speakerLabel` in crates/thunderforge-server/src/graphql/types_dice.rs and queries/roll.rs, with the label withheld per viewer
   - a test in mutations_roll_tests.rs
-- [ ] T008 Regenerate apps/thunderforge/schema.graphql (the repo's schema export) and confirm the diff is only the spec 103 fields. Run `cargo check -p thunderforge-server` and `cargo test -p thunderforge-server speaker` on the checkout's own test DB.
+- [X] T008 Regenerate apps/thunderforge/schema.graphql (the repo's schema export) and confirm the diff is only the spec 103 fields. Run `cargo check -p thunderforge-server` and `cargo test -p thunderforge-server speaker` on the checkout's own test DB.
 
 ### Client types and the demo backend
 
