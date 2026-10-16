@@ -74,6 +74,27 @@ const SPAN_CLASS: Record<SheetRegion["span"], string> = {
 };
 
 /**
+ * Spec 100 FR-012: four columns put the short ability scores in a row with
+ * Character and Combat, the two tallest regions, and left the scores' card
+ * mostly empty. From `@7xl` each row pairs regions of a height instead: those
+ * two take two rows each with Skills under the scores; then Coins, Features
+ * and Notes; then Persona beside Defences and Proficiencies; then the short
+ * Classes and Spellcasting. Every row fills its four columns.
+ */
+const WIDE_CLASS: Partial<Record<string, string>> = {
+  identity: "@7xl:row-span-2",
+  combat: "@7xl:row-span-2",
+  coins: "@7xl:order-1",
+  features: "@7xl:order-1",
+  notes: "@7xl:order-1",
+  persona: "@7xl:order-2",
+  defences: "@7xl:order-2",
+  proficiencies: "@7xl:order-2",
+  classes: "@7xl:order-3",
+  spellcasting: "@7xl:order-3",
+};
+
+/**
  * The D&D 5e character sheet the host mounts on the actor's edit and view
  * routes and in the play dock (`apps/web/src/pages/world/actor/systemActorSheets.ts`).
  *
@@ -490,7 +511,7 @@ export default function DnD5eActorSheet({ actor, canEdit }: ActorSheetProps) {
           <section
             key={region.id}
             aria-labelledby={`dnd5e-region-${region.id}`}
-            className={`${cardClass} @container grid content-start gap-3 ${SPAN_CLASS[region.span]}`}
+            className={`${cardClass} @container grid content-start gap-3 ${SPAN_CLASS[region.span]} ${WIDE_CLASS[region.id] ?? ""}`}
             data-testid={`dnd5e-region-${region.id}`}
             data-region={region.id}
             data-span={region.span}
