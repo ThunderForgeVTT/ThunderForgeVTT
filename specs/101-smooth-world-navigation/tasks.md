@@ -144,11 +144,11 @@ Paths are relative to the repo root; `web/` means `apps/web/src/`.
 **Goal**: the paused banner is there on each page's first paint.
 **Independent test**: US4 acceptance.
 
-- [ ] T023 [US4] Add to `world-navigation.spec.ts`: the GM pauses play
+- [X] T023 [US4] Add to `world-navigation.spec.ts`: the GM pauses play
   (as `play-pause.spec.ts` does); the player moves between two pages and
   the paused banner is present at first paint of the second; the pause is
   lifted and the banner goes after the focus refresh.
-- [ ] T024 [US4] `web/hooks/useWorldPlayState.ts`: read and write
+- [X] T024 [US4] `web/hooks/useWorldPlayState.ts`: read and write
   `playState` through the store; the focus refresh writes it too. T023
   and `play-pause.spec.ts` pass.
 

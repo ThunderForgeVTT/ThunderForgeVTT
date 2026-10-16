@@ -6,6 +6,11 @@ import {
   registerAndCreateWorld,
   uniqueSuffix,
 } from "./fixtures/helpers";
+import { openAdminPage } from "./fixtures/admin";
+import {
+  liftPauseAsOperator,
+  pauseWorldAsOperator,
+} from "./fixtures/playPause";
 
 /**
  * Spec 101: moving between a world's pages keeps the page on screen. The
@@ -308,5 +313,59 @@ test.describe("Spec 101: smooth world navigation", () => {
     await expect(
       page.getByRole("heading", { name: "This world could not be opened." }),
     ).toBeVisible();
+  });
+
+  test("a paused world says so on each page's first frame (US4)", async ({
+    page,
+    browser,
+  }) => {
+    const worldId = await registerAndCreateWorld(
+      page,
+      `E2E Navigation Paused ${uniqueSuffix()}`,
+    );
+    const adminPage = await openAdminPage(browser);
+    try {
+      const { pause } = await pauseWorldAsOperator(
+        adminPage,
+        worldId,
+        `Navigation check ${uniqueSuffix()}`,
+      );
+
+      await page.goto(`/world/${worldId}`);
+      const banner = page.getByTestId("world-play-paused-banner");
+      await expect(banner).toBeVisible();
+
+      // Every frame the next page draws its sidebar, the banner is with it.
+      await page.evaluate(() => {
+        const seen = { withoutBanner: 0 };
+        (window as unknown as { __paused: typeof seen }).__paused = seen;
+        new MutationObserver(() => {
+          const sidebar = document.querySelector(
+            '[data-testid="world-sidebar-nav"]',
+          );
+          const shown = document.querySelector(
+            '[data-testid="world-play-paused-banner"]',
+          );
+          if (sidebar && !shown) seen.withoutBanner += 1;
+        }).observe(document.body, { childList: true, subtree: true });
+      });
+      await goBySidebar(page, "Players", /\/players$/);
+      await expect(banner).toBeVisible();
+      await goBySidebar(page, "Overview", new RegExp(`/world/${worldId}$`));
+      await expect(banner).toBeVisible();
+      const paused = await page.evaluate(
+        () =>
+          (window as unknown as { __paused: { withoutBanner: number } })
+            .__paused,
+      );
+      expect(paused.withoutBanner).toBe(0);
+
+      // A lift is heard when the tab regains focus, not remembered past it.
+      await liftPauseAsOperator(adminPage, pause.id, "Navigation check done");
+      await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+      await expect(banner).toHaveCount(0);
+    } finally {
+      await adminPage.context().close();
+    }
   });
 });
