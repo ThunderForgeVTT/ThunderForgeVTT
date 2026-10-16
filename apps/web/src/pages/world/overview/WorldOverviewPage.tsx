@@ -24,10 +24,7 @@ import { reachedThroughAdminAccess } from "@/pages/world/adminAccess";
 import { WorldAtAGlance } from "@/pages/world/components/WorldAtAGlance";
 import { PartyStrip } from "@/pages/world/overview/PartyStrip";
 import { SceneStrip } from "@/pages/world/overview/SceneStrip";
-import {
-  resumeLabel,
-  useSceneHeadlines,
-} from "@/pages/world/overview/sceneStrip";
+import { useSceneHeadlines } from "@/pages/world/overview/sceneStrip";
 import { resolvePanel } from "@/panels/systemPanels";
 import type { SeoConfig } from "@/types/seo";
 import type { WorldRecord } from "@/types/world";
@@ -188,11 +185,7 @@ export default function WorldOverviewPage() {
   return (
     <>
       {seo}
-      <WorldSectionShell
-        worldId={id}
-        isGm={isGm}
-        playLabel={resumeLabel(scenes, world.activeSceneId)}
-      >
+      <WorldSectionShell worldId={id} isGm={isGm}>
         <main className="grid w-full gap-6" data-testid="world-staging-page">
           {status ? <StatusBadge variant="danger">{status}</StatusBadge> : null}
 

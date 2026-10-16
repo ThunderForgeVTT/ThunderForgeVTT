@@ -31,8 +31,7 @@ export const pictureOf = (scene: SceneHeadline): string | null =>
 
 /**
  * The world's scene headlines: `null` while loading, `"failed"` when they
- * could not be read. Read once by the overview, for the strip and for the
- * scene Play resumes in.
+ * could not be read. Read once by the overview, for the strip.
  */
 export function useSceneHeadlines(
   worldId: string,
@@ -55,14 +54,4 @@ export function useSceneHeadlines(
     };
   }, [worldId]);
   return loaded?.worldId === worldId ? loaded.scenes : null;
-}
-
-/** Play names the scene it opens on, once the scenes say which that is. */
-export function resumeLabel(
-  scenes: readonly SceneHeadline[] | "failed" | null,
-  activeSceneId: string | null,
-): string {
-  if (!activeSceneId || !Array.isArray(scenes)) return "Play";
-  const active = scenes.find((scene) => scene.sceneId === activeSceneId);
-  return active ? `Resume in ${active.name}` : "Play";
 }

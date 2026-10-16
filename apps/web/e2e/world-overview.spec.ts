@@ -69,6 +69,14 @@ test.describe("Spec 100 US3: the overview gets the session ready", () => {
     await expect(page.getByTestId("play-button")).toHaveText(
       /Resume in The Cellar/,
     );
+
+    // Every world page's Play says the same, not only the overview's.
+    for (const section of ["players", "scenes", "compendium"]) {
+      await page.goto(`/world/${worldId}/${section}`);
+      await expect(page.getByTestId("play-button")).toHaveText(
+        /Resume in The Cellar/,
+      );
+    }
   });
 
   test("the party fills in as players join; each section has an empty state", async ({

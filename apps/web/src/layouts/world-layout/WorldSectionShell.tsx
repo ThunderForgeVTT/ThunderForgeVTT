@@ -1,5 +1,6 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
+import { getResumeSceneName } from "@/api/worldStatistics";
 import { Button } from "@/components/ui/button/Button";
 import { WorldAppearance } from "@/appearance/WorldAppearance";
 import { PlayPausedBanner } from "@/components/world/PlayPausedBanner";
@@ -8,8 +9,6 @@ import { WorldSidebarNav } from "@/layouts/world-layout/WorldSidebarNav";
 export interface WorldSectionShellProps {
   worldId: string;
   isGm: boolean;
-  /** Spec 100 US3.4: the overview says which scene Play resumes in. */
-  playLabel?: string;
   children: ReactNode;
 }
 
@@ -22,6 +21,10 @@ export interface WorldSectionShellProps {
  * sidebar's category list or duplicated per-page) so every screen gets
  * exactly one, in the same place.
  *
+ * Play names the scene it resumes in (spec 100 US3.4) on every page here,
+ * not only the overview: the shell asks once per world, and says "Play"
+ * until it knows, or when no scene is active.
+ *
  * Width and gutter match `Container` (spec 100 US4): `--page-max` caps the
  * page on ultrawide screens, `w-full` lets it shrink freely below that. Play's own full-screen canvas is unrelated
  * chrome and isn't wrapped by this component.
@@ -29,9 +32,27 @@ export interface WorldSectionShellProps {
 export function WorldSectionShell({
   worldId,
   isGm,
-  playLabel = "Play",
   children,
 }: WorldSectionShellProps) {
+  const [resume, setResume] = useState<{
+    worldId: string;
+    scene: string | null;
+  } | null>(null);
+  useEffect(() => {
+    let active = true;
+    getResumeSceneName(worldId)
+      .then((scene) => {
+        if (active) setResume({ worldId, scene });
+      })
+      .catch(() => {
+        // Play still works; it just does not name the scene.
+      });
+    return () => {
+      active = false;
+    };
+  }, [worldId]);
+  const scene = resume?.worldId === worldId ? resume.scene : null;
+
   return (
     <WorldAppearance worldId={worldId}>
       <div
@@ -46,7 +67,9 @@ export function WorldSectionShell({
             icon="spark"
             data-testid="play-button"
           >
-            <Link to={`/world/${worldId}/play`}>{playLabel}</Link>
+            <Link to={`/world/${worldId}/play`}>
+              {scene ? `Resume in ${scene}` : "Play"}
+            </Link>
           </Button>
         </div>
         {/* Spec 051 US5: here rather than on one page, so every hub screen a

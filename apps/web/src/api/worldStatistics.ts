@@ -92,3 +92,31 @@ export function getSceneHeadlines(worldId: string): Promise<SceneHeadline[]> {
     { worldId },
   ).then((data) => data.scenes);
 }
+
+/**
+ * The name of the scene Play opens on, or `null` when no scene is active or
+ * the caller cannot see it. One request, for the Play button on every world
+ * page (spec 100 US3.4).
+ */
+export function getResumeSceneName(worldId: string): Promise<string | null> {
+  return postGraphQL<{
+    world: { activeSceneId: string | null } | null;
+    scenes: { sceneId: string; name: string }[];
+  }>(
+    `
+      query WorldResumeScene($worldId: UUID!) {
+        world(id: $worldId) {
+          activeSceneId
+        }
+        scenes(worldId: $worldId) {
+          sceneId
+          name
+        }
+      }
+    `,
+    { worldId },
+  ).then(({ world, scenes }) => {
+    const active = world?.activeSceneId;
+    return scenes.find((scene) => scene.sceneId === active)?.name ?? null;
+  });
+}

@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import type { SceneHeadline } from "@/api/worldStatistics";
 import {
   pictureOf,
-  resumeLabel,
   SCENE_CARD_COUNT,
   scenesForStrip,
 } from "@/pages/world/overview/sceneStrip";
@@ -41,20 +40,5 @@ describe("scenesForStrip", () => {
     expect(pictureOf(both)).toBe("p");
     expect(pictureOf({ ...both, previewUrl: null })).toBe("b");
     expect(pictureOf(scene("none", 1))).toBeNull();
-  });
-});
-
-describe("resumeLabel", () => {
-  const scenes = [scene("a", 1), scene("b", 2)];
-
-  it("names the table's scene", () => {
-    expect(resumeLabel(scenes, "a")).toBe("Resume in a");
-  });
-
-  it("says Play while loading, on failure, or with no scene at the table", () => {
-    expect(resumeLabel(null, "a")).toBe("Play");
-    expect(resumeLabel("failed", "a")).toBe("Play");
-    expect(resumeLabel(scenes, null)).toBe("Play");
-    expect(resumeLabel(scenes, "gone")).toBe("Play");
   });
 });
