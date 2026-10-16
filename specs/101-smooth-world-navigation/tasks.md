@@ -154,11 +154,11 @@ Paths are relative to the repo root; `web/` means `apps/web/src/`.
 
 ## Phase 7: Polish and proof
 
-- [ ] T025 Add to `world-navigation.spec.ts` the account switch (SC-004):
+- [X] T025 Add to `world-navigation.spec.ts` the account switch (SC-004):
   user A loads a paused world's pages, signs out, user B signs in in the
   same tab and opens their own world; none of A's world name, admin nav or
   banner appears at any point.
-- [ ] T026 [P] Update the doc comments that describe the old behaviour:
+- [X] T026 [P] Update the doc comments that describe the old behaviour:
   `web/layouts/world-layout/WorldSectionShell.tsx`,
   `web/hooks/useWorldMembers.ts`, `web/hooks/useActorClaimGate.ts`.
 - [ ] T027 Checks: `tsc -b --noEmit`, eslint, prettier on touched

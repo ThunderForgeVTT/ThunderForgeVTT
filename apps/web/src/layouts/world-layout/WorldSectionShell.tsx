@@ -17,8 +17,10 @@ export interface WorldSectionShellProps {
  * Shared chrome for the world's "hub" pages (Session Setup, Compendium,
  * System settings) — a persistent category sidebar plus a consistent
  * top-right Play button, alongside whatever the page itself renders.
- * Kept as a thin wrapper (not a nested route layout) so each route page's
- * existing data-fetching is untouched. Play lives here (rather than in the
+ * Kept as a thin wrapper (not a nested route layout); what the pages read
+ * again on every arrival (the world, its members, the play state) comes
+ * from the shared world store (spec 101), shown at once and refreshed
+ * behind the page. Play lives here (rather than in the
  * sidebar's category list or duplicated per-page) so every screen gets
  * exactly one, in the same place.
  *

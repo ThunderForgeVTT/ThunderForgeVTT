@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 import { test, expect } from "./fixtures/test";
 import {
+  freshCredentials,
   graphql,
   inviteAndJoinAsPlayer,
   registerAndCreateWorld,
@@ -60,6 +61,14 @@ const seen = (page: Page) =>
         }
       ).__seen,
   );
+
+/** A client-side route change, as a link would make: the document stays. */
+async function spaGo(page: Page, path: string) {
+  await page.evaluate((to) => {
+    window.history.pushState({}, "", to);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  }, path);
+}
 
 async function goBySidebar(page: Page, name: string, url: RegExp) {
   await page
@@ -367,5 +376,100 @@ test.describe("Spec 101: smooth world navigation", () => {
     } finally {
       await adminPage.context().close();
     }
+  });
+
+  test("the next account in the same tab never sees the last one's world (SC-004)", async ({
+    page,
+    browser,
+  }) => {
+    const nameA = `E2E Navigation Before ${uniqueSuffix()}`;
+    const worldA = await registerAndCreateWorld(page, nameA);
+    const adminPage = await openAdminPage(browser);
+    try {
+      await pauseWorldAsOperator(
+        adminPage,
+        worldA,
+        `Account switch ${uniqueSuffix()}`,
+      );
+    } finally {
+      await adminPage.context().close();
+    }
+
+    await page.goto(`/world/${worldA}`);
+    await expect(page.getByTestId("world-play-paused-banner")).toBeVisible();
+    await goBySidebar(page, "Players", /\/players$/);
+    await expect(page.getByTestId("world-nav-admin")).toBeVisible();
+
+    // From here on, one document: everything below is client-side.
+    await page.evaluate(
+      ({ name, worldId }) => {
+        const leaks = { name: 0, banner: 0, admin: 0 };
+        (window as unknown as { __leaks: typeof leaks }).__leaks = leaks;
+        new MutationObserver(() => {
+          if (document.body.innerText.includes(name)) leaks.name += 1;
+          if (
+            document.querySelector('[data-testid="world-play-paused-banner"]')
+          ) {
+            leaks.banner += 1;
+          }
+          // B runs their own world; only controls into A's would leak.
+          if (
+            document.querySelector(
+              `[data-testid="world-nav-admin"] a[href*="${worldId}"]`,
+            )
+          ) {
+            leaks.admin += 1;
+          }
+        }).observe(document.body, {
+          childList: true,
+          subtree: true,
+          characterData: true,
+        });
+      },
+      { name: nameA, worldId: worldA },
+    );
+    const leaks = () =>
+      page.evaluate(
+        () =>
+          (
+            window as unknown as {
+              __leaks: { name: number; banner: number; admin: number };
+            }
+          ).__leaks,
+      );
+
+    await page.getByRole("button", { name: "Menu" }).click();
+    await page.getByRole("menuitem", { name: "Sign out" }).click();
+    await page.waitForURL(/\/login$/);
+    // What is on screen at the moment of signing out is not a leak.
+    await page.evaluate(() => {
+      const l = (
+        window as unknown as {
+          __leaks: { name: number; banner: number; admin: number };
+        }
+      ).__leaks;
+      l.name = l.banner = l.admin = 0;
+    });
+
+    const b = freshCredentials("e2e");
+    await spaGo(page, "/register");
+    await page.locator("#register-username").fill(b.username);
+    await page.locator("#register-email").fill(b.email);
+    await page.locator("#register-password").fill(b.password);
+    await page.locator("#register-password-confirmation").fill(b.password);
+    await page.getByRole("button", { name: "Create account" }).click();
+    await page.waitForURL(/\/worlds\/create$/);
+    await page
+      .locator("#world-name")
+      .fill(`E2E Navigation After ${uniqueSuffix()}`);
+    await page.getByRole("button", { name: /create world/i }).click();
+    await page.waitForURL(/\/world\/[^/]+$/);
+    await expect(page.getByTestId("world-staging-page")).toBeVisible();
+    // A's world, asked for by B: refused, and nothing of A's from memory.
+    await spaGo(page, `/world/${worldA}`);
+    await expect(
+      page.getByRole("heading", { name: "This world could not be opened." }),
+    ).toBeVisible();
+    expect(await leaks()).toEqual({ name: 0, banner: 0, admin: 0 });
   });
 });

@@ -11,12 +11,11 @@
  * collection), and there was never a live GraphQL subscription transport
  * wired up client-side to make its "reactive" local-cache queries actually
  * reflect server-side pushes anyway (at best they mirrored this browser
- * tab's own optimistic writes). This hook now fetches directly via
- * GraphQL on mount and whenever `worldId` changes, mirroring the
- * established fallback pattern in `useActorSystemData.ts`. There is no
- * live push transport, so members will NOT update in this view when
- * another user joins/leaves/changes role elsewhere — call `refetch()` (or
- * remount) to pick up changes.
+ * tab's own optimistic writes). This hook reads directly via GraphQL each
+ * time a page mounts it, and keeps the answer per world (spec 101, below).
+ * There is no live push transport, so members do NOT update in this view
+ * when another user joins/leaves/changes role elsewhere — the next page,
+ * or `refetch()`, picks up changes.
  */
 
 import { useCallback, useEffect, useState } from "react";

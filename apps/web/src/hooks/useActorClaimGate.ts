@@ -6,11 +6,10 @@
  * visit to the world (WorldDashboardPage) — `myActorClaim` is re-checked
  * every time rather than cached from join time.
  *
- * Deliberately does NOT use the RxDB-backed `useWorldRole` hook: a member
- * who has *just* joined via `joinWorld` (the exact moment this gate
- * matters) cannot assume RxDB's world-member collection has replicated
- * their own brand-new row yet, which left this gate hanging indefinitely
- * during verification. `getMyWorldMemberRole` hits the server directly
+ * Deliberately does NOT use the `useWorldRole` roster: a member who has
+ * *just* joined via `joinWorld` (the exact moment this gate matters) may
+ * not be in a roster read before the join, which once left this gate
+ * hanging indefinitely during verification. `getMyWorldMemberRole` hits the server directly
  * instead, and is itself the thing that decides whether to call
  * `myActorClaim` at all — that query returns `null` for the GM too (per
  * contracts/graphql-actor-claim.md), so this hook must distinguish
