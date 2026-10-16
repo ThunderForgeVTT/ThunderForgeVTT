@@ -158,6 +158,7 @@ pub fn start(canvas_selector: &str) {
         .add_plugins(StatusDisplayPlugin)
         // Playtest 2026-09-10 P7: names above tokens, above their bars.
         .add_plugins(plugins::nameplate::NameplatePlugin)
+        .add_plugins(plugins::speech::SpeechPlugin)
         // Spec 067 Story 4: a marker for each condition a token's character
         // is under.
         .add_plugins(plugins::condition_markers::ConditionMarkersPlugin)

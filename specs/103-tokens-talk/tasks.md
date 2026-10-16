@@ -60,7 +60,7 @@ description: "Task list for spec 103, Tokens Talk"
 
 ### Engine: SpeechPlugin
 
-- [ ] T011 Write the failing tests first in crates/thunderforge-engine/src/plugins/speech_tests.rs (pattern: token_culling_tests.rs):
+- [X] T011 Write the failing tests first in crates/thunderforge-engine/src/plugins/speech_tests.rs (pattern: token_culling_tests.rs):
   - `say` on a visible, in-view token spawns one bubble child and emits `placement: over`
   - a second `say` on the same token replaces it
   - a token with `Visibility::Hidden` gets no bubble and emits `edge`
@@ -68,16 +68,16 @@ description: "Task list for spec 103, Tokens Talk"
   - a bubble despawns after `ms`
   - `clear_speech` despawns all
   - a viewer change that hides a token despawns its bubble
-- [ ] T012 Implement crates/thunderforge-engine/src/plugins/speech.rs per contracts/engine.md:
+- [X] T012 Implement crates/thunderforge-engine/src/plugins/speech.rs per contracts/engine.md:
   - the `SpeechPlugin`
   - `Speech` and `ViewInsets` resources
   - the bubble: `Text2d` on a dark backing sprite, child of the token, upright, above the nameplate's z, at most ⅓ of the view's width, 3 lines then "…"
   - roll emphasis
-  - `motion` flag
+  - reduced motion, read from the existing `ReducedMotion` resource (`set_reduced_motion`)
   - expiry
   - `speech_placed` through `sdk.rs::emit_event`
   Register it in plugins/mod.rs and app.rs.
-- [ ] T013 Parse `say`, `clear_speech` and `set_view_insets` in crates/thunderforge-engine/src/sdk.rs `parse_command`, with tests beside the `set_rendering` test, and route them in app.rs. Export the wasm `speech_bubbles() -> String` modelled on `nameplate.rs::token_nameplates`. Run `cargo check -p thunderforge-engine --target wasm32-unknown-unknown` and `cargo test -p thunderforge-engine speech`. T011 must pass.
+- [X] T013 Parse `say`, `clear_speech` and `set_view_insets` in crates/thunderforge-engine/src/sdk.rs `parse_command`, with tests beside the `set_rendering` test, and route them in app.rs. Export the wasm `speech_bubbles() -> String` modelled on `nameplate.rs::token_nameplates`. Run `cargo check -p thunderforge-engine --target wasm32-unknown-unknown` and `cargo test -p thunderforge-engine speech`. T011 must pass.
 - [ ] T014 [P] Add the `speech_placed` event type and parser to packages/encounter/src/engineEvents.ts, in the `EngineEvent` union, with a unit test beside the existing parser tests. Expose `speech_bubbles` on the engine type the page uses (apps/web engine loader and apps/landing/src/engine/loadEngine.ts if typed there).
 
 **Checkpoint**: The server stores and checks speakers, the engine draws and places bubbles, and the page can hear placements.
@@ -95,7 +95,7 @@ description: "Task list for spec 103, Tokens Talk"
   - keeps the ids seen at mount plus a 10 s freshness window (research R6)
   - hears chat arrivals through `startPlayPanelEventSync({ onChatMessage })` + `subscribeToWorldEvents(worldId)` and refetches via `getWorldChatMessages`
   - resolves the token on the current scene
-  - sends `{ type: "say", id: "chat:<id>", tokenId, name, text, kind: "line", ms: TALK_FLOAT_MS, motion }` through the engine send, or pushes an edge float when there is no token
+  - sends `{ type: "say", id: "chat:<id>", tokenId, name, text, kind: "line", ms: TALK_FLOAT_MS }` through the engine send, or pushes an edge float when there is no token
   - listens for `speech_placed` `edge` and moves that float to the stack
   - exports `TALK_FLOAT_MS = 6000`
   - unit-tests the freshness and seen-set logic in TokenTalk/__tests__/useTalk.test.ts
@@ -190,7 +190,7 @@ description: "Task list for spec 103, Tokens Talk"
 ## Phase 8: Polish & Cross-Cutting
 
 - [ ] T035 [P] Write the demo standalone e2e apps/demo/e2e/tokens-talk.spec.ts: one person, the GM view and a player view (switching as the demo does), covering a line bubble over the character, a roll float without formula, an edge float when panned away, and chat open clearing floats, at phone size (412×915) and desktop. Run `pnpm e2e:talk:standalone`.
-- [ ] T036 [P] Verify reduced motion: an e2e step with `reducedMotion: "reduce"` asserts edge floats have no transition and `say` carries `motion: false` (spy on the engine send in the demo).
+- [ ] T036 [P] Verify reduced motion: an e2e step with `reducedMotion: "reduce"` asserts edge floats have no transition and the engine heard `set_reduced_motion {reduced: true}` (spy on the engine send in the demo).
 - [ ] T037 Run `cargo check -p thunderforge-engine --target wasm32-unknown-unknown`, `make lint`, `pnpm -F @thunderforge/web typecheck`, and the demo build. Run impeccable detect on the TokenTalk files and fix its findings.
 - [ ] T038 Proof: run `pnpm e2e:talk` alone with `--record-durations`, grep the log for ✘, then run the slices `pnpm e2e:which` names for the diff (expected: chat via rolls, phone). Record the results and wall time here.
 - [ ] T039 Owner phone test (SC-008): serve the demo through the tunnel, and the owner sees their character talk and roll and tunes `TALK_FLOAT_MS` if needed. Nothing is pushed until they greenlight.

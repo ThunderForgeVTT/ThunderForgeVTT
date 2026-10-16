@@ -120,8 +120,9 @@
   - Bubbles and edge floats use a fixed dark backing (≥90% opaque) with light
     text, so contrast is ≥ 7:1 on any map.
   - The name line is set in the accent colour, checked ≥ 4.5:1 on the backing.
-  - Under `prefers-reduced-motion`, the page passes `motion: false` in `say`
-    and the edge stack uses no transitions.
+  - Under `prefers-reduced-motion`, the engine already hears
+    `set_reduced_motion` (dice, token glide); bubbles read the same flag and
+    neither rise nor fade, and the edge stack uses no transitions.
   - The edge stack is `aria-live="polite"`, holds no focusable element except
     the float buttons, and never calls `focus()`.
 

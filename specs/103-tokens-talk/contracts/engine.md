@@ -10,7 +10,7 @@ through the existing event callback and are parsed in
 
 ```json
 { "type": "say", "id": "chat:3f…", "tokenId": "9a…", "name": "Brakka",
-  "text": "Hold the door!", "kind": "line", "ms": 6000, "motion": true }
+  "text": "Hold the door!", "kind": "line", "ms": 6000 }
 ```
 
 - The engine judges placement once (research R2):
@@ -20,9 +20,11 @@ through the existing event callback and are parsed in
     the token wears. It then emits `speech_placed { placement: "over" }`.
   - Otherwise it draws nothing and emits `speech_placed { placement: "edge" }`.
 - `kind: "roll"`: the same bubble with the result emphasised.
-- `motion: false`: no rise or fade animation; it appears and disappears.
-- The bubble is at most one third of the view's width. Text past that wraps
-  to 3 lines, then ends in "…".
+- Under the existing `set_reduced_motion {reduced: true}` there is no rise or
+  fade: the bubble appears and disappears. `ms` defaults to 6000 and is capped
+  at 60000.
+- The bubble wraps at 260 screen px (a third of a phone's width), and a line
+  past 120 characters ends in "…" (about three lines).
 - It despawns itself after `ms`.
 
 ### `clear_speech`

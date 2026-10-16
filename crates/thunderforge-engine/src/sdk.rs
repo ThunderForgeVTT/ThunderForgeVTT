@@ -370,6 +370,42 @@ pub(crate) fn parse_command(input: &str) -> Option<ExternalCommand> {
         "set_rendering" => Some(ExternalCommand::SetRendering {
             on: value.get("on")?.as_bool()?,
         }),
+        "say" => {
+            use crate::plugins::speech::{Say, SpeechKind};
+            Some(ExternalCommand::Say {
+                say: Say {
+                    id: value.get("id")?.as_str()?.to_owned(),
+                    token_id: value.get("tokenId")?.as_str()?.to_owned(),
+                    name: value.get("name")?.as_str()?.to_owned(),
+                    text: value.get("text")?.as_str()?.to_owned(),
+                    kind: match value.get("kind").and_then(Value::as_str) {
+                        Some("roll") => SpeechKind::Roll,
+                        _ => SpeechKind::Line,
+                    },
+                    ms: value
+                        .get("ms")
+                        .and_then(Value::as_u64)
+                        .map_or(6000, |ms| ms.min(60_000) as u32),
+                },
+            })
+        }
+        "clear_speech" => Some(ExternalCommand::ClearSpeech),
+        "set_view_insets" => {
+            let edge = |key: &str| {
+                value
+                    .get(key)
+                    .and_then(Value::as_f64)
+                    .map_or(0.0, |v| (v as f32).max(0.0))
+            };
+            Some(ExternalCommand::SetViewInsets {
+                insets: crate::plugins::speech::ViewInsets {
+                    top: edge("top"),
+                    right: edge("right"),
+                    bottom: edge("bottom"),
+                    left: edge("left"),
+                },
+            })
+        }
         _ => None,
     }
 }
@@ -657,6 +693,47 @@ mod selection_command_tests {
         ));
         assert!(parse_command(r#"{"type":"set_rendering"}"#).is_none());
         assert!(parse_command(r#"{"type":"set_rendering","on":"no"}"#).is_none());
+    }
+
+    /// Spec 103: a line said as a token, with its kind and life; a roll is
+    /// named, anything else is a line, and a missing life is six seconds.
+    #[test]
+    fn a_say_carries_its_line_and_defaults_its_kind_and_life() {
+        use crate::plugins::speech::SpeechKind;
+        let Some(ExternalCommand::Say { say }) = parse_command(
+            r#"{"type":"say","id":"roll:1","tokenId":"t","name":"Brakka","text":"Attack 17","kind":"roll","ms":4000}"#,
+        ) else {
+            panic!("a say");
+        };
+        assert_eq!(
+            (say.kind, say.ms, say.text.as_str()),
+            (SpeechKind::Roll, 4000, "Attack 17")
+        );
+        let Some(ExternalCommand::Say { say }) = parse_command(
+            r#"{"type":"say","id":"chat:1","tokenId":"t","name":"Brakka","text":"Hi"}"#,
+        ) else {
+            panic!("a say");
+        };
+        assert_eq!((say.kind, say.ms), (SpeechKind::Line, 6000));
+        assert!(parse_command(r#"{"type":"say","id":"x","name":"n","text":"t"}"#).is_none());
+        assert!(matches!(
+            parse_command(r#"{"type":"clear_speech"}"#),
+            Some(ExternalCommand::ClearSpeech)
+        ));
+    }
+
+    /// Missing or negative edges are zero: chrome never makes the view bigger.
+    #[test]
+    fn view_insets_default_missing_and_negative_edges_to_zero() {
+        let Some(ExternalCommand::SetViewInsets { insets }) =
+            parse_command(r#"{"type":"set_view_insets","bottom":180,"left":-4}"#)
+        else {
+            panic!("insets");
+        };
+        assert_eq!(
+            (insets.top, insets.right, insets.bottom, insets.left),
+            (0.0, 0.0, 180.0, 0.0)
+        );
     }
 
     /// A light table names its grid's ink; a scene that does not gets the
