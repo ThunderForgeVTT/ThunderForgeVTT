@@ -71,7 +71,9 @@
 - `ActorImageryPanel` stacks portrait over token in the rail
   (`@container` with `@sm:grid-cols-2` instead of `sm:`).
 - `packs/systems/dnd5e/web/src/ActorSheet.tsx`: the grid adds
-  `@5xl:grid-cols-4`, and `SPAN_CLASS` gains the 4-column spans. Each
+  `@7xl:grid-cols-4` (80rem of sheet: at `@5xl` a 1440px screen already
+  had four cramped columns); regions span at most 3, so `SPAN_CLASS` is
+  unchanged. Each
   region's wrapper becomes `@container`, so `AbilitiesSection`,
   `SkillsSection`, `SpellcastingSection`, `PersonaSection`,
   `ClassesSection` and `FeaturesSection` query their region.

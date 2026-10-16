@@ -7,9 +7,9 @@ import {
 
 /**
  * Spec 088 US3 (SC-004, FR-034 to FR-036, contracts/layouts.md): the actor
- * view uses the width it has. One column on a phone, two from 1024 px, three
- * from 1536 px, the content capped at 2640 px and centred, and no sideways
- * scroll from 320 px to 3840 px. The world page's half is
+ * view uses the width it has. One column on a phone; from 1024 px a rail
+ * beside the sheet (spec 100 US5), the content capped at 2640 px and
+ * centred, and no sideways scroll from 320 px to 3840 px. The world page's half is
  * `world-layout-widths.spec.ts`, in the worlds slice.
  */
 
@@ -69,11 +69,11 @@ const WIDTHS: { width: number; columns: number; capped: boolean }[] = [
   { width: 320, columns: 1, capped: false },
   { width: 375, columns: 1, capped: false },
   { width: 1280, columns: 2, capped: false },
-  { width: 2560, columns: 3, capped: false },
-  { width: 3840, columns: 3, capped: true },
+  { width: 2560, columns: 2, capped: false },
+  { width: 3840, columns: 2, capped: true },
 ];
 
-test("the actor view takes one, two or three columns, capped at 2640 px, with no sideways scroll", async ({
+test("the actor view takes a column, then a rail beside the sheet, capped at 2640 px, with no sideways scroll", async ({
   page,
 }) => {
   test.setTimeout(120_000);

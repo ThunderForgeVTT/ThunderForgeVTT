@@ -145,7 +145,7 @@ export interface SheetRegion {
   kind: SheetRegionKind;
   title: string;
   blurb: string;
-  /** Columns the region takes at `lg` (three columns); one column below `md`. */
+  /** Columns the region takes in a three- or four-column sheet; one below `@md`. */
   span: 1 | 2 | 3;
 }
 

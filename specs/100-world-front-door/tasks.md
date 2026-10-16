@@ -33,11 +33,11 @@
 
 ## Phase 5: The character page (US5)
 
-- [ ] T012 [US5] Rail and sheet layout on `ActorDetailPage`; imagery in
+- [x] T012 [US5] Rail and sheet layout on `ActorDetailPage`; imagery in
   the rail.
-- [ ] T013 [US5] Region `@container`s and the 4-column sheet in the 5e
+- [x] T013 [US5] Region `@container`s and the 4-column sheet in the 5e
   pack; the same wrapper for the other system sheets.
-- [ ] T014 [US5] e2e: ability inputs inside their cells, sheet columns
+- [x] T014 [US5] e2e: ability inputs inside their cells, sheet columns
   (SC-006); the play dock's sheet still one column.
 
 ## Phase 6: Demo notice (US6)

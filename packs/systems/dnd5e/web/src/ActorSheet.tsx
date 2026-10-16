@@ -62,6 +62,10 @@ import { cardClass, hintClass, sectionHeadingClass } from "./components/styles";
  * 22rem wide on a monitor of any size. Asked about the viewport, the sheet
  * laid itself out in three columns inside that dock, each a few characters
  * wide. What it has to fit is the box it was given, so that is what it asks.
+ *
+ * Spec 100 US5: a fourth column from `@7xl` (80rem of sheet), and each region
+ * is a container too, so its insides (six ability scores, nine spell slots)
+ * size by the region and not by the whole sheet.
  */
 const SPAN_CLASS: Record<SheetRegion["span"], string> = {
   1: "",
@@ -468,7 +472,7 @@ export default function DnD5eActorSheet({ actor, canEdit }: ActorSheetProps) {
   return (
     <div className="@container">
       <div
-        className="grid grid-cols-1 gap-4 @md:grid-cols-2 @xl:grid-cols-3"
+        className="grid grid-cols-1 gap-4 @md:grid-cols-2 @xl:grid-cols-3 @7xl:grid-cols-4"
         data-testid="dnd5e-actor-sheet"
         data-editable={canEdit ? "true" : "false"}
         aria-busy={isPending}
@@ -476,7 +480,7 @@ export default function DnD5eActorSheet({ actor, canEdit }: ActorSheetProps) {
         {error ? (
           <p
             role="alert"
-            className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive @md:col-span-2 @xl:col-span-3"
+            className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive @md:col-span-2 @xl:col-span-3 @7xl:col-span-4"
             data-testid="dnd5e-sheet-error"
           >
             {error}
@@ -486,7 +490,7 @@ export default function DnD5eActorSheet({ actor, canEdit }: ActorSheetProps) {
           <section
             key={region.id}
             aria-labelledby={`dnd5e-region-${region.id}`}
-            className={`${cardClass} grid content-start gap-3 ${SPAN_CLASS[region.span]}`}
+            className={`${cardClass} @container grid content-start gap-3 ${SPAN_CLASS[region.span]}`}
             data-testid={`dnd5e-region-${region.id}`}
             data-region={region.id}
             data-span={region.span}
