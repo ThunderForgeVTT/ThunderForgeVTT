@@ -42,7 +42,7 @@ description: "Task list for spec 103, Tokens Talk"
   - `send_chat_message_impl` calls `resolve_speaker` before the insert and stores both columns
   - `GraphQLChatMessage` gains `speaker_token_id` and `speaker_label`, the latter resolved per viewer with `speaker_label_for` in the query that lists messages
   - add tests to the existing chat tests for a stored speaker and a refused one
-- [ ] T007 Wire the roll side:
+- [X] T007 Wire the roll side:
   - `RollDiceInput.speakerTokenId` in crates/thunderforge-server/src/graphql/mutations_roll.rs (`roll_dice_impl` calls `resolve_speaker`)
   - output fields `speakerTokenId`/`speakerLabel` in crates/thunderforge-server/src/graphql/types_dice.rs and queries/roll.rs, with the label withheld per viewer
   - a test in mutations_roll_tests.rs

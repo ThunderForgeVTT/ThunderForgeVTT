@@ -52,6 +52,7 @@ async fn non_member_is_rejected_before_any_roll_happens() {
             bindings: None,
             visibility: None,
             label: None,
+            speaker_token_id: None,
         },
         &mut rng,
     )
@@ -89,6 +90,7 @@ async fn member_can_roll_and_a_record_is_persisted() {
             bindings: None,
             visibility: None,
             label: None,
+            speaker_token_id: None,
         },
         &mut rng,
     )
@@ -113,6 +115,7 @@ fn one_d20(world_id: Uuid) -> RollDiceInput {
         bindings: None,
         visibility: None,
         label: None,
+        speaker_token_id: None,
     }
 }
 
@@ -252,6 +255,7 @@ async fn malformed_formula_produces_zero_rows() {
             bindings: None,
             visibility: None,
             label: None,
+            speaker_token_id: None,
         },
         &mut rng,
     )
@@ -287,6 +291,7 @@ async fn two_rolls_from_different_users_are_independent_records() {
             bindings: None,
             visibility: None,
             label: None,
+            speaker_token_id: None,
         },
         &mut rng_a,
     )
@@ -303,6 +308,7 @@ async fn two_rolls_from_different_users_are_independent_records() {
             bindings: None,
             visibility: None,
             label: None,
+            speaker_token_id: None,
         },
         &mut rng_b,
     )
@@ -343,6 +349,7 @@ async fn placeholder_bindings_flow_through_and_missing_ones_are_specific_errors(
             }]),
             visibility: None,
             label: None,
+            speaker_token_id: None,
         },
         &mut rng,
     )
@@ -362,6 +369,7 @@ async fn placeholder_bindings_flow_through_and_missing_ones_are_specific_errors(
             }]),
             visibility: None,
             label: None,
+            speaker_token_id: None,
         },
         &mut rng,
     )
@@ -380,6 +388,7 @@ async fn placeholder_bindings_flow_through_and_missing_ones_are_specific_errors(
             bindings: None,
             visibility: None,
             label: None,
+            speaker_token_id: None,
         },
         &mut rng,
     )
@@ -414,6 +423,7 @@ async fn spec_013_item_effect_formula_resolves_unchanged() {
             bindings: None,
             visibility: None,
             label: None,
+            speaker_token_id: None,
         },
         &mut rng,
     )
@@ -441,6 +451,7 @@ async fn spec_013_item_effect_formula_resolves_unchanged() {
             ]),
             visibility: None,
             label: None,
+            speaker_token_id: None,
         },
         &mut rng,
     )
@@ -517,6 +528,7 @@ async fn roll_as(
             bindings: None,
             visibility,
             label: label.map(str::to_string),
+            speaker_token_id: None,
         },
         &mut rng,
     )
@@ -581,6 +593,7 @@ async fn a_refused_roll_records_no_row_and_no_event() {
                 bindings: None,
                 visibility: None,
                 label: None,
+                speaker_token_id: None,
             },
             &mut rng,
         )

@@ -10,6 +10,7 @@ use uuid::Uuid;
 use std::collections::HashMap;
 
 use crate::auth::world_membership::{actor_in_world, is_dm_of_world, require_world_member};
+use crate::graphql::speaker::{readable_speakers, speaker_label};
 use crate::graphql::types::{GraphQLRollRecord, MaskedRoll, RollLinks, WorldRoll, WorldRollEntry};
 use crate::graphql::{app_state, authenticated_user};
 use crate::models::RollRecord;
@@ -144,6 +145,8 @@ pub struct RollContext {
     pub rerolled_by: HashMap<Uuid, Uuid>,
     /// Spec 084: the spends the viewer could reroll each of their rolls by.
     pub offers: HashMap<Uuid, Vec<(String, String)>>,
+    /// Spec 103: the speaker each roll was made as, as the viewer may read it.
+    pub speakers: HashMap<Uuid, String>,
 }
 
 impl RollContext {
@@ -161,10 +164,12 @@ impl RollContext {
             system_id,
             rerolled_by,
             offers: HashMap::new(),
+            speakers: HashMap::new(),
         })
     }
 
     /// Spec 084: what `viewer` could reroll each of their own `rows` by now.
+    /// Spec 103: and the speaker of each, "Someone" where the name is hidden.
     pub fn offer(
         &mut self,
         conn: &mut PgConnection,
@@ -172,6 +177,19 @@ impl RollContext {
         viewer: Viewer,
         rows: &[RollRecord],
     ) -> QueryResult<()> {
+        let readable = readable_speakers(
+            conn,
+            viewer.is_gm,
+            rows.iter().map(|row| row.speaker_token_id),
+        )?;
+        for row in rows {
+            let stored = row.speaker_label.clone();
+            if let Some(label) =
+                speaker_label(viewer.is_gm, &readable, row.speaker_token_id, stored)
+            {
+                self.speakers.insert(row.id, label);
+            }
+        }
         let now = chrono::Utc::now();
         for row in rows {
             let rerolled_by = self.rerolled_by.get(&row.id).copied();
@@ -196,6 +214,7 @@ impl RollContext {
             system_id: &self.system_id,
             rerolled_by: self.rerolled_by.get(&roll_id).copied(),
             offers: self.offers.get(&roll_id).map_or(&[], Vec::as_slice),
+            speaker_label: self.speakers.get(&roll_id).map(String::as_str),
         }
     }
 }
@@ -503,6 +522,7 @@ mod tests {
                 bindings: None,
                 visibility: None,
                 label: None,
+                speaker_token_id: None,
             },
             &mut rng,
         )

@@ -16,6 +16,7 @@ use uuid::Uuid;
 
 use crate::auth::world_membership::{actor_in_world, is_dm_of_world, require_world_member};
 use crate::graphql::queries::roll::{RollContext, usernames, viewer_in_world};
+use crate::graphql::speaker::resolve_speaker;
 use crate::graphql::types::{GraphQLRollResolution, RollVisibility, WorldRoll};
 use crate::graphql::{app_state, authenticated_user};
 use crate::models::{NewRollRecord, RollRecord};
@@ -47,6 +48,9 @@ pub struct RollDiceInput {
     pub visibility: Option<RollVisibility>,
     /// Spec 081: what it was for, at most 80 characters.
     pub label: Option<String>,
+    /// Spec 103: the token the roll is made as; the roller's own, or any
+    /// token for the GM.
+    pub speaker_token_id: Option<Uuid>,
 }
 
 /// Spec 081: the longest label a roll keeps.
@@ -136,14 +140,17 @@ where
     let world_id = input.world_id;
     let visibility: Visibility = input.visibility.unwrap_or(RollVisibility::Everyone).into();
     let label = roll_label(input.label)?;
-    tokio::task::spawn_blocking(move || -> GraphQLResult<()> {
+    let speaker_token_id = input.speaker_token_id;
+    let speaker = tokio::task::spawn_blocking(move || -> GraphQLResult<_> {
         require_world_member(&mut conn, user_id, world_id)
             .map_err(|_| Error::new("You must be a member of this world to roll dice"))?;
         refuse_if_paused(&mut conn, world_id)?;
         // FR-007: an admin who does not run the world rolls as a player.
         let is_gm = actor_in_world(&mut conn, user_id, false, world_id).runs_the_world();
         may_roll(visibility, is_gm).map_err(Error::new)?;
-        Ok(())
+        speaker_token_id
+            .map(|token| resolve_speaker(&mut conn, world_id, None, user_id, false, token))
+            .transpose()
     })
     .await
     .map_err(|_| Error::new("Failed to spawn blocking task"))??;
@@ -186,6 +193,7 @@ where
         )
     };
     meta.write_to(&mut new_record);
+    (new_record.speaker_token_id, new_record.speaker_label) = speaker.unzip();
 
     let mut conn = state
         .db_pool
@@ -451,3 +459,7 @@ impl RollMutation {
 #[cfg(test)]
 #[path = "mutations_roll_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "mutations_roll_speaker_tests.rs"]
+mod speaker_tests;

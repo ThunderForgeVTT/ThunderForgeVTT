@@ -257,6 +257,7 @@ pub async fn roll_skill_impl<R: rand::Rng>(
             bindings: None,
             visibility: None,
             label: None,
+            speaker_token_id: None,
         },
         RollMeta::default(),
         rng,
