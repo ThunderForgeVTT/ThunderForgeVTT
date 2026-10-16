@@ -14,6 +14,9 @@ export function Loader({
 }: LoaderProps) {
   return (
     <div
+      // A page's full-screen wait, which spec 101 keeps to a world's first
+      // page in a tab; `world-navigation.spec.ts` watches for it.
+      data-testid={fullScreen ? "page-loader" : undefined}
       className={cn(
         "flex items-center justify-center gap-2 text-sm text-muted-foreground",
         fullScreen && "min-h-screen w-full",

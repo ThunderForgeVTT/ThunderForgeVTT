@@ -13,15 +13,15 @@ Paths are relative to the repo root; `web/` means `apps/web/src/`.
 
 ## Phase 1: Setup
 
-- [ ] T001 Record the decision as ADR 116 in
+- [x] T001 Record the decision as ADR 116 in
   `docs/adrs/20261016-116-shared_world_state_is_a_context.md`: per-world
   stale-while-revalidate React context, no query library, revisit when
   the remembered kinds grow past about five more (FR-010, research R1).
-- [ ] T002 [P] Add the test hooks the e2e needs: a `data-testid="page-loader"`
+- [x] T002 [P] Add the test hooks the e2e needs: a `data-testid="page-loader"`
   on `Loader` when `fullScreen` in `web/components/ui/loader/Loader.tsx`,
   and `data-testid="world-nav-admin"` on the GM group in
   `web/layouts/world-layout/WorldSidebarNav.tsx`.
-- [ ] T003 [P] Add `world-navigation.spec.ts` to the `worlds` slice's `own`,
+- [x] T003 [P] Add `world-navigation.spec.ts` to the `worlds` slice's `own`,
   and `actor-claim.spec.ts`, `players-section.spec.ts`,
   `play-pause.spec.ts`, `gm-staging-page.spec.ts` to its `neighbours`, in
   `scripts/e2e/slices.json`; confirm with `pnpm e2e:which`.

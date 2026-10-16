@@ -188,7 +188,10 @@ export function WorldSidebarNav({ worldId, isGm }: WorldSidebarNavProps) {
       </div>
 
       {isGm ? (
-        <div className="-mx-1 flex gap-1 overflow-x-auto px-1 lg:mx-0 lg:grid lg:border-t lg:border-border lg:px-0 lg:pt-3">
+        <div
+          data-testid="world-nav-admin"
+          className="-mx-1 flex gap-1 overflow-x-auto px-1 lg:mx-0 lg:grid lg:border-t lg:border-border lg:px-0 lg:pt-3"
+        >
           {!collapsed ? (
             <p className="hidden px-3 pb-1 text-[0.65rem] font-semibold tracking-widest text-muted-foreground uppercase lg:block">
               Admin
