@@ -18,8 +18,8 @@ description: "Task list for spec 103, Tokens Talk"
 
 ## Phase 1: Setup
 
-- [ ] T001 Add the `talk` slice to scripts/e2e/slices.json (own prefix `tokens-talk-`; neighbours `chat-panel.spec.ts`, `rolls-everyone.spec.ts`, `rolls-gm-only.spec.ts`, `rolls-gm-eyes.spec.ts`, `rolls-reveal.spec.ts`, `dice-roll.spec.ts`, each with its seam per plan.md; `paths` per the plan's tree; `standalone`: `pnpm -F @thunderforge/demo e2e tokens-talk`). Add `e2e:talk`, `e2e:talk:standalone` and `e2e:talk:integration` to the root package.json, modelled on `e2e:rolls`. `node scripts/check-e2e-slices.mjs` must pass.
-- [ ] T002 [P] Write the ADR docs/adrs/20261016-117-speech_is_drawn_by_the_engine.md from research.md R1–R2: the engine draws bubbles and emits an edge placement; the page owns only the right-edge stack. Add it to docs/adrs/README.md.
+- [ ] T001 Add the `talk` slice to scripts/e2e/slices.json (own prefix `tokens-talk-`; neighbours `chat-panel.spec.ts`, `rolls-everyone.spec.ts`, `rolls-gm-only.spec.ts`, `rolls-gm-eyes.spec.ts`, `rolls-reveal.spec.ts`, `dice-roll.spec.ts`, each with its seam per plan.md; `paths` per the plan's tree; `standalone`: `pnpm -F @thunderforge/demo e2e tokens-talk`). Add `e2e:talk`, `e2e:talk:standalone` and `e2e:talk:integration` to the root package.json, modelled on `e2e:rolls`. `node scripts/check-e2e-slices.mjs` must pass. The checker rejects an `own` prefix or `paths` entry that matches no tracked file, and package.json scripts must belong to a slice, so the slice and scripts land together with the first `tokens-talk-` spec.
+- [X] T002 [P] Write the ADR docs/adrs/20261016-117-speech_is_drawn_by_the_engine.md from research.md R1–R2: the engine draws bubbles and emits an edge placement; the page owns only the right-edge stack. Add it to docs/adrs/README.md.
 
 ---
 

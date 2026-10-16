@@ -127,6 +127,7 @@ This directory contains architecture decisions for ThunderForgeVTT, captured usi
 | [20261007-114](./20261007-114-telemetry_is_on_and_the_operators_to_redirect.md) | Accepted | Telemetry Is On, Anonymous, and the Operator's to Redirect |
 | [20261008-115](./20261008-115-character_sheets_are_read_twice_by_one_reader.md) | Accepted | Character Sheets Are Read Twice, by One Reader |
 | [20261016-116](./20261016-116-shared_world_state_is_a_context.md) | Proposed | Shared World State Is a Context, Not a Query Library |
+| [20261016-117](./20261016-117-speech_is_drawn_by_the_engine.md) | Proposed | Speech Is Drawn by the Engine; the Page Owns Only the Edge |
 
 > **Note (2026-08-19):** ADRs 020–024 originally collided with an unrelated "pack system" batch that reused the same day-020 through day-024 numbers. The world-domain ADRs (020–024 above) were committed first and are documented here; the colliding pack-system ADRs were renumbered to 026–030. See `docs/SYSTEM_HOOKS_API_GUIDE.md` and ADR-036's "Related Decisions" for the corrected references.
 
