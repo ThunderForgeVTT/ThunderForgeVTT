@@ -30,24 +30,24 @@ Paths are relative to the repo root; `web/` means `apps/web/src/`.
 
 **Blocks every story.**
 
-- [ ] T004 Write `web/hooks/world-chrome-store.test.ts` (vitest, node
+- [x] T004 Write `web/hooks/world-chrome-store.test.ts` (vitest, node
   environment, plain functions as `useUnsavedChanges.test.ts` does) for
   `world-chrome-store.ts`: `patchChrome` returns the same object for an
   equal patch and replaces `members` whole; `joinRead` gives a second
   caller of one `worldId:key` the first caller's promise and forgets it
   once settled; `isRefusal` is true for a `GraphQLRequestError` with codes
   and false for one without and for a `TypeError`. See it fail.
-- [ ] T005 Create `web/hooks/world-chrome-store.ts` with `patchChrome`,
+- [x] T005 Create `web/hooks/world-chrome-store.ts` with `patchChrome`,
   `joinRead` and `isRefusal` (no React). Widen `WorldChrome` in
   `web/hooks/world-chrome-context.ts` with `world`, `members`,
   `claimCleared`, `playState` (data-model.md), and make `useWorldChrome`
   read through `joinRead`. T004 passes.
-- [ ] T006 In `web/hooks/WorldChromeProvider.tsx`: hold the in-flight map
+- [x] T006 In `web/hooks/WorldChromeProvider.tsx`: hold the in-flight map
   in a ref; apply patches with `patchChrome`; read `useAuth().user?.id` and
   start from an empty store (and an empty in-flight map) when it changes,
   so an answer started for the previous user is dropped. Proven in e2e by
   T025 (no DOM test environment in apps/web).
-- [ ] T007 Add `useKnownWorld(worldId)` to `web/hooks/world-chrome-context.ts`
+- [x] T007 Add `useKnownWorld(worldId)` to `web/hooks/world-chrome-context.ts`
   per contracts/world-chrome.md: `{ world, known }`; a `null` answer or a
   `GraphQLRequestError` with a non-empty `codes` writes `world: null`, any
   other rejection keeps the known world (research R3), decided by
