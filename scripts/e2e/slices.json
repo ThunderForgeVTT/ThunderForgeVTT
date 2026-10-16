@@ -738,6 +738,44 @@
       ]
     },
     {
+      "name": "phone",
+      "summary": "The play board on a phone: bottom row, sheets, installable app (specs/102-mobile-play-board)",
+      "own": [],
+      "neighbours": [
+        {
+          "spec": "play-panels-by-role.spec.ts",
+          "seam": "the dock sections each role sees are the ones the phone rows are built from"
+        },
+        {
+          "spec": "dice-roll.spec.ts",
+          "seam": "the dice roller renders inside a sheet on a phone"
+        },
+        {
+          "spec": "board-loading.spec.ts",
+          "seam": "the board's loading and stopped overlays sit under the phone chrome"
+        },
+        {
+          "spec": "play-pause.spec.ts",
+          "seam": "the paused banner moves into the phone's top stack"
+        },
+        {
+          "spec": "world-navigation.spec.ts",
+          "seam": "the world page shell now fills the dynamic viewport height"
+        }
+      ],
+      "paths": [
+        "apps/web/src/components/world/PhoneBoard/**",
+        "apps/web/src/hooks/usePhoneLayout.ts",
+        "apps/web/src/pages/world/WorldPage.tsx",
+        "apps/web/src/layouts/world-layout/WorldLayout.tsx",
+        "apps/web/index.html",
+        "apps/demo/index.html",
+        "apps/demo/src/DemoNotice.tsx",
+        "apps/demo/e2e/phone-board.spec.ts"
+      ],
+      "standalone": "pnpm -F @thunderforge/demo e2e phone-board"
+    },
+    {
       "name": "play-pause",
       "summary": "Pausing and resuming play (specs/051-operator-playfield-shutdown)",
       "own": ["play-pause"],

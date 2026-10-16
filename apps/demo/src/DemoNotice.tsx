@@ -57,7 +57,9 @@ export function DemoNotice() {
     <aside
       aria-label="About this demo"
       data-testid="demo-notice"
-      className={`${open ? "rounded-2xl" : "rounded-full"} border-border bg-card/95 text-card-foreground fixed bottom-2 left-1/2 z-50 flex max-w-[calc(100vw-1rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-x-3 gap-y-1 border px-4 py-1.5 text-xs shadow-lg backdrop-blur sm:rounded-full`}
+      // Spec 102 R8: on a phone the bottom belongs to the board's row, so the
+      // pill is a chip at the top left, clear of the centred top stack.
+      className={`${open ? "rounded-2xl" : "rounded-full"} border-border bg-card/95 text-card-foreground fixed top-[max(8px,env(safe-area-inset-top))] left-2 z-[1075] flex max-w-[calc(100vw-1rem)] flex-wrap items-center gap-x-3 gap-y-1 border px-3 text-xs shadow-lg backdrop-blur sm:top-auto sm:bottom-2 sm:left-1/2 sm:z-50 sm:-translate-x-1/2 sm:justify-center sm:rounded-full sm:px-4 sm:py-1.5`}
     >
       <button
         type="button"
@@ -65,14 +67,14 @@ export function DemoNotice() {
         aria-controls="demo-notice-details"
         onClick={() => setOpen((was) => !was)}
         data-testid="demo-notice-toggle"
-        className="min-h-6 font-medium whitespace-nowrap sm:hidden"
+        className="min-h-11 min-w-11 font-medium whitespace-nowrap sm:hidden"
       >
-        <strong>Demo</strong> · nothing leaves this browser{" "}
-        <span aria-hidden="true">{open ? "▾" : "▸"}</span>
+        <strong>Demo</strong> <span aria-hidden="true">{open ? "▾" : "▸"}</span>
+        <span className="sr-only">: nothing leaves this browser</span>
       </button>
       <div
         id="demo-notice-details"
-        className={`${open ? "flex" : "hidden"} flex-wrap items-center justify-center gap-x-3 gap-y-1 sm:contents`}
+        className={`${open ? "flex" : "hidden"} flex-col items-start gap-y-2 pb-3 sm:contents`}
       >
         <span>
           <strong>Demo.</strong> Nothing is saved anywhere but this browser.

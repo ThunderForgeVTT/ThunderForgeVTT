@@ -74,8 +74,11 @@ export interface InPaneCharacterSheetProps {
   actor: WorldActorRecord;
   /** Whether the viewer runs the world; it decides the roll picker's choices. */
   isGm?: boolean;
-  /** Returns the pane to whatever it was showing before (FR-002/US2 #3). */
-  onDismiss: () => void;
+  /**
+   * Returns the pane to whatever it was showing before (FR-002/US2 #3). A
+   * phone's board sheet closes itself, so it passes none (spec 102).
+   */
+  onDismiss?: () => void;
 }
 
 export function InPaneCharacterSheet({
@@ -112,15 +115,17 @@ export function InPaneCharacterSheet({
       data-testid="in-pane-character-sheet"
     >
       <header className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={onDismiss}
-          data-testid="in-pane-sheet-dismiss"
-          aria-label="Back to actors"
-          className="rounded border border-border px-2 py-1 text-xs transition-colors hover:bg-muted"
-        >
-          ‹ Back
-        </button>
+        {onDismiss ? (
+          <button
+            type="button"
+            onClick={onDismiss}
+            data-testid="in-pane-sheet-dismiss"
+            aria-label="Back to actors"
+            className="rounded border border-border px-2 py-1 text-xs transition-colors hover:bg-muted"
+          >
+            ‹ Back
+          </button>
+        ) : null}
         <span className="min-w-0 flex-1 truncate text-sm font-semibold">
           {actor.label}
         </span>

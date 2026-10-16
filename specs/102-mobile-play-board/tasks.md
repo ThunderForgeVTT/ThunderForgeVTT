@@ -23,7 +23,7 @@ means `apps/web/src/components/world/PhoneBoard/`.
 
 ## Phase 1: Setup
 
-- [ ] T001 Add the `phone` slice to `scripts/e2e/slices.json`: `own`
+- [x] T001 Add the `phone` slice to `scripts/e2e/slices.json`: `own`
   `phone-board.spec.ts`, `phone-app.spec.ts`; `standalone` running the demo
   `phone-board` spec; `neighbours` with seams: `play-panels-by-role.spec.ts`
   (dock sections by role), `dice-roll.spec.ts` (dice roller moves into a
@@ -36,6 +36,7 @@ means `apps/web/src/components/world/PhoneBoard/`.
   `pnpm e2e:which`. The pre-commit hook refuses entries that match no
   tracked file, so the slice lands with the first spec file and grows its
   `own` and `paths` as each file is created.
+  *Done note*: `own` names apps/web specs only, so it stays empty until T020's web spec exists and `e2e:phone` runs the demo standalone half (as `landing` does); `e2e:phone:integration` joins with T020. `paths` list only files that exist (the pre-commit hook requires it); `phone-app.spec.ts`, the manifest, icons, `brand-icons.mjs` and `useActiveCombat.ts` join with T018 and US5.
 - [x] T002 [P] Viewport meta in `apps/web/index.html` and
   `apps/demo/index.html`: `width=device-width, initial-scale=1,
   viewport-fit=cover, interactive-widget=resizes-content` (R5).
@@ -66,7 +67,7 @@ means `apps/web/src/components/world/PhoneBoard/`.
   data-model.md, labels and `FantasyIcon` names reused from `GmToolRail.tsx`
   and `WorldDock.tsx` (export their maps if they are module-private). T006
   passes.
-- [ ] T008 Create `pb/BoardSheet.tsx` (R4): radix-ui `Dialog` with
+- [x] T008 Create `pb/BoardSheet.tsx` (R4): radix-ui `Dialog` with
   `modal={false}`, bottom-anchored, `data-testid="board-sheet"`,
   `data-size` `half` (max-height 60dvh) | `full`, `data-content`; a grab
   handle (pointer drag up past 48px → full, down → half/close) and
@@ -76,13 +77,14 @@ means `apps/web/src/components/world/PhoneBoard/`.
   close; bottom padding `env(safe-area-inset-bottom)`; 180ms slide,
   none under `prefers-reduced-motion`. Background `bg-background/95` and
   `border-border` as the dock's panel.
-- [ ] T009 Create `pb/PhoneBoard.tsx` (default export, for `React.lazy`)
+  *Done note*: the sheet floats above the row (row stays visible and tappable) rather than sitting flush at the bottom edge.
+- [x] T009 Create `pb/PhoneBoard.tsx` (default export, for `React.lazy`)
   taking the page's `tools`, `openToolId`, `onOpenToolChange`, `sections`,
   `openSectionId`, `onOpenSectionIdChange`, `isGm`, `worldId`, and render
   slots for the dice panel and top notices; holds `toolOptionsOpen` and the
   one open sheet (`content`, `size`) per data-model.md; renders
   `phone-board` (`data-role`), `phone-top-stack`, the row and the sheet.
-- [ ] T010 In `web/pages/world/WorldPage.tsx`, read `usePhoneLayout()`; when
+- [x] T010 In `web/pages/world/WorldPage.tsx`, read `usePhoneLayout()`; when
   true render `<Suspense><PhoneBoard …/></Suspense>` (lazy import) in place
   of the `toolRail` and `dock` slots, passing the same state (R2). Move the
   companion notice, revoked-tool notice, `PlayPausedBanner`,
@@ -98,7 +100,8 @@ means `apps/web/src/components/world/PhoneBoard/`.
 **Independent test**: demo, player view, 412×915: five tiles, map share
 ≥ 85%, each of the four jobs one tap away.
 
-- [ ] T011 [P] [US1] Write `apps/demo/e2e/phone-board.spec.ts` (player
+  *Done note*: the companion and revoked notices and the selection bar move into the top stack; `PlayPausedBanner` and `ConnectionStatus` still render from `WorldBoardOverlays` (revisit after T017).
+- [x] T011 [P] [US1] Write `apps/demo/e2e/phone-board.spec.ts` (player
   part): `test.use({ viewport: { width: 412, height: 915 }, hasTouch: true,
   isMobile: true })`; switch the demo to the player view; assert
   `phone-row` buttons are exactly Me, Dice, Sheet, Chat, More; no
@@ -106,23 +109,26 @@ means `apps/web/src/components/world/PhoneBoard/`.
   contract formula; Me centres and selects the player's token
   (selection count 1); Dice, Sheet and Chat each open `board-sheet` with
   their content. See it fail.
-- [ ] T012 [P] [US1] Create `pb/BottomRow.tsx`: `nav` "Board",
+  *Done note*: `openDemo` makes its own 1440×900 context, so the spec calls `page.setViewportSize` instead of `test.use`; Me is asserted as "no note, no chooser" (the demo player's token is on the scene). Also asserts ≥44×44 and hit-testing for every visible button, and Back closing the sheet.
+- [x] T012 [P] [US1] Create `pb/BottomRow.tsx`: `nav` "Board",
   `data-testid="phone-row"`, five tiles 56×52 (icon over 11px label),
   rounded-2xl, each `bg-background/85 backdrop-blur border border-border
   shadow`, gap 8px, centred, `bottom: max(12px,
   env(safe-area-inset-bottom))`; open tile `aria-expanded` and the primary
   colour; badge slot. Landscape (shorter side is height): a right-edge
   column, same tiles.
-- [ ] T013 [US1] Me (R7) in `pb/PhoneBoard.tsx`: claimed actor from
+- [x] T013 [US1] Me (R7) in `pb/PhoneBoard.tsx`: claimed actor from
   `useScenePlay` → its token on the scene (`useSceneTokens`, by `actorId`)
   → `selection.selectOne` + `lookAtToken`; several → a chooser sheet; none
   on this scene → open Sheet with "Your character isn't on this scene".
-- [ ] T014 [US1] Sheet: render `InPaneCharacterSheet` for the claimed actor
+- [x] T014 [US1] Sheet: render `InPaneCharacterSheet` for the claimed actor
   inside `BoardSheet`; no claimed actor → the Actors section's claim prompt.
-- [ ] T015 [US1] Dice: render the existing `DiceRollerPanel` content inside
+  *Done note*: inside the phone sheet `InPaneCharacterSheet` gets no `onDismiss`, so its 26px "‹ Back" is not drawn (the sheet's own close and Back do that job). No claimed actor shows a note pointing to More → Actors.
+- [x] T015 [US1] Dice: render the existing `DiceRollerPanel` content inside
   `BoardSheet` when phone (`web/components/world/DiceRollerPanel/`), not the
   floating bottom-left tray; the Tokens toggle moves into More/Tools (R8).
-- [ ] T016 [US1] Create `pb/MoreSheet.tsx`: the player's `more` group from
+  *Done note*: the GM's token tray is in the Tools sheet's board group; the player has no token tray item (open question for T017).
+- [x] T016 [US1] Create `pb/MoreSheet.tsx`: the player's `more` group from
   `phoneRows` as `phone-item-<id>` buttons (≥ 44 tall rows with icon and
   label), each opening its section or arming its tool.
 - [ ] T017 [US1] Try-out: build the demo with `ENGINE_PROFILE=release`,

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   claimPlayField,
@@ -36,10 +36,12 @@ import { useScenePlay } from "./useScenePlay";
 import { usePinnedTokenStatus } from "./usePinnedTokenStatus";
 import { useMapImport } from "./useMapImport";
 import { useDockSections } from "./useDockSections";
+import { usePlayerSeat } from "@/components/world/PhoneBoard/usePlayerSeat";
 import { WorldBoardOverlays } from "./WorldBoardOverlays";
 
 import { useAuth } from "@/hooks/useAuth";
 import { useWorldRole } from "@/hooks/useWorldRole";
+import { usePhoneLayout } from "@/hooks/usePhoneLayout";
 import { useSceneUnits } from "@/hooks/useSceneUnits";
 import { useSceneLevels } from "@/pages/world/useSceneLevels";
 import { LevelTabs } from "@/components/world/LevelTabs";
@@ -59,7 +61,10 @@ import { SelectionCount } from "@/components/world/SelectionCount";
 import { SelectionBar } from "@/components/canvas-tools/SelectionBar";
 import { CanvasContextMenu } from "@/components/world/CanvasContextMenu/CanvasContextMenu";
 import { useCanvasContextMenu } from "@/components/world/CanvasContextMenu/useCanvasContextMenu";
-import { GmToolRail } from "@/components/world/GmToolRail/GmToolRail";
+import {
+  GmToolRail,
+  type GmTool,
+} from "@/components/world/GmToolRail/GmToolRail";
 import { SelectionFilterMenu } from "@/components/world/GmToolRail/SelectionFilterMenu";
 import { PlacedItemPrompt } from "@/components/world/PlacedItemPrompt";
 import { toast } from "sonner";
@@ -69,6 +74,11 @@ import { MapCreditLine } from "@/components/world/MapCredit";
 import { OfferPrompt } from "@/components/world/PlayDock/OfferPrompt/OfferPrompt";
 import type { WorldRecord } from "@/types/world";
 import type { SceneRecord } from "@/types/scene";
+
+// Spec 102 R11: only a phone downloads the phone board.
+const PhoneBoard = lazy(
+  () => import("@/components/world/PhoneBoard/PhoneBoard"),
+);
 import { PANEL_PIN_KEY, readSavedPin } from "./worldPageHelpers";
 
 export const worldPageSeo: SeoConfig = {
@@ -492,6 +502,201 @@ export default function WorldPage() {
     navigate,
   });
 
+  // Spec 102: the board's chrome on a phone. The same elements as the
+  // desktop board, placed by PhoneBoard instead of the rail and dock.
+  const phone = usePhoneLayout();
+  const seat = usePlayerSeat({
+    worldId: id,
+    worldStore,
+    sceneId,
+    claimedActorId,
+    tokens: allTokens,
+    selectOne: facets.selection.selectOne,
+  });
+  const dice = (
+    <DiceRollerPanel
+      worldId={id}
+      engineReady={engineReady}
+      isGameMaster={isSceneOwner}
+    />
+  );
+  // Filtered, not merely disabled: FR-047 says a tool a person may not use
+  // is not offered. A greyed-out button still tells them the tool exists
+  // and invites them to ask why it does not work.
+  const authoringTools: GmTool[] =
+    hasToolRail && sceneId
+      ? railTools<GmTool>(
+          [
+            {
+              id: "select",
+              label: "Select",
+              icon: "select",
+              // A panel after all, but a collapsible one that remembers
+              // being collapsed. The original reasoning — that an
+              // always-open panel would cover 256px of map to say "you
+              // may now click things" — is answered by the collapse,
+              // not contradicted: a Game Master who does not want it
+              // never sees it again (spec 031 FR-010).
+              content: <SelectionFilterMenu />,
+            },
+            {
+              id: "walls",
+              label: "Walls",
+              icon: "shield",
+              content: (
+                <WallTool
+                  worldStore={worldStore}
+                  walls={worldState.walls}
+                  selectedWallId={worldState.selectedWallId}
+                />
+              ),
+            },
+            {
+              id: "lights",
+              label: "Lights",
+              icon: "torch",
+              content: (
+                <LightingTool
+                  worldStore={worldStore}
+                  lights={worldState.lights}
+                  selectedLightId={worldState.selectedLightId}
+                  tokens={worldState.tokens}
+                  ambientLight={sceneAmbient}
+                  onAmbientLightChange={
+                    sceneId ? changeSceneAmbient : undefined
+                  }
+                  timeOfDay={sceneTime}
+                  onTimeOfDayChange={sceneId ? changeSceneTime : undefined}
+                  explorationEnabled={explorationOn}
+                  onExplorationChange={sceneId ? changeExploration : undefined}
+                  onExplorationReset={sceneId ? resetExploration : undefined}
+                  players={explorationPlayers}
+                  units={sceneUnits}
+                />
+              ),
+            },
+            {
+              id: "shapes",
+              label: "Shapes",
+              icon: "tokens",
+              content: (
+                <ShapeTool
+                  worldStore={worldStore}
+                  shapes={worldState.shapes}
+                  selectedShapeId={worldState.selectedShapeId}
+                  sceneId={sceneId}
+                  canvasContainerRef={containerRef}
+                  isGm={isSceneOwner}
+                  sceneName={selectedScene?.name}
+                />
+              ),
+            },
+            {
+              id: "tokens",
+              label: "Tokens",
+              icon: "actors",
+              content: (
+                <TokenTool
+                  control={facets.tokens}
+                  selectedTokenId={worldState.selectedTokenId}
+                  worldId={id}
+                  sceneId={sceneId}
+                />
+              ),
+            },
+            {
+              // Spec 030. Last in the rail because it is authored *onto*
+              // what the other four place: you draw a wall, then decide
+              // it is a door that opens.
+              id: "interactions",
+              label: "Interactions",
+              icon: "rune",
+              content: (
+                <InteractionTool
+                  worldStore={worldStore}
+                  worldId={id}
+                  sceneId={sceneId}
+                  selectedTokenId={worldState.selectedTokenId}
+                  selectedWallId={worldState.selectedWallId}
+                  walls={worldState.walls}
+                  lights={worldState.lights}
+                  levels={sceneLevelList}
+                />
+              ),
+            },
+          ],
+          allowedTools,
+          isSceneOwner,
+        )
+      : [];
+  const takenOverNotice =
+    playField.status === "companion" || playField.status === "unclaimed" ? (
+      <div
+        role="status"
+        data-testid="play-field-taken-over-notice"
+        data-play-field-state={playField.status}
+        className="fixed inset-x-0 top-0 z-50 bg-amber-900/90 px-4 py-2 text-center text-sm text-amber-50"
+      >
+        {playField.status === "companion"
+          ? "Another window of your account has taken the table. This one is now a companion — it will not apply changes to the map."
+          : "No window of your account is at the table, so this one will not apply changes to the map."}{" "}
+        <button
+          type="button"
+          data-testid="take-play-field-back"
+          className="underline underline-offset-2"
+          onClick={() => claimPlayField(id)}
+        >
+          Take it back here
+        </button>
+      </div>
+    ) : null;
+  const revokedNotice = revokedTool ? (
+    <div
+      role="status"
+      data-testid="authoring-tool-revoked-notice"
+      className="fixed top-4 left-1/2 z-[1100] -translate-x-1/2 rounded-lg border border-border bg-background/95 px-4 py-2 text-sm shadow-xl backdrop-blur"
+    >
+      <span>
+        The {revokedTool} tool is no longer available to you. Anything you were
+        drawing with it was discarded.
+      </span>
+      <button
+        type="button"
+        className="ml-3 rounded-md px-1.5 text-muted-foreground hover:text-foreground"
+        aria-label="Dismiss"
+        onClick={() => setRevokedTool(null)}
+      >
+        ×
+      </button>
+    </div>
+  ) : null;
+  const boardTop = (
+    <div className="pointer-events-none absolute top-3 left-1/2 z-[1040] flex max-w-[50%] -translate-x-1/2 items-center justify-center gap-2">
+      <LevelTabs
+        levels={sceneLevelList}
+        level={sceneLevel}
+        isGm={isSceneOwner}
+        selectedTokenIds={worldState.selectedTokenIds}
+        actions={levelActions}
+      />
+      {/* How many tokens a stack click picked up; nothing for one. */}
+      <SelectionCount selectedTokenIds={worldState.selectedTokenIds} />
+      {/* Spec 085 FR-018: a group in Select. Someone without a rail
+       * is always in Select. */}
+      {!hasToolRail || (effectiveGmToolId ?? "select") === "select" ? (
+        <SelectionBar
+          worldStore={worldStore}
+          isGm={isSceneOwner}
+          walls={worldState.walls}
+          selectedTokenIds={worldState.selectedTokenIds}
+          selectedWallIds={worldState.selectedWallIds}
+          selectedLightIds={worldState.selectedLightIds}
+          selectedShapeIds={worldState.selectedShapeIds}
+        />
+      ) : null}
+    </div>
+  );
+
   return (
     <>
       <SEO {...seo} />
@@ -519,26 +724,7 @@ export default function WorldPage() {
           Not re-claiming automatically is deliberate: the person moved to the
           other window on purpose, and that window closing is not them asking
           to be dragged back. It is an offer, not a restoration. */}
-      {playField.status === "companion" || playField.status === "unclaimed" ? (
-        <div
-          role="status"
-          data-testid="play-field-taken-over-notice"
-          data-play-field-state={playField.status}
-          className="fixed inset-x-0 top-0 z-50 bg-amber-900/90 px-4 py-2 text-center text-sm text-amber-50"
-        >
-          {playField.status === "companion"
-            ? "Another window of your account has taken the table. This one is now a companion — it will not apply changes to the map."
-            : "No window of your account is at the table, so this one will not apply changes to the map."}{" "}
-          <button
-            type="button"
-            data-testid="take-play-field-back"
-            className="underline underline-offset-2"
-            onClick={() => claimPlayField(id)}
-          >
-            Take it back here
-          </button>
-        </div>
-      ) : null}
+      {phone ? null : takenOverNotice}
       <CanvasContextMenu
         request={canvasMenu.request}
         onDone={canvasMenu.done}
@@ -561,156 +747,50 @@ export default function WorldPage() {
           onDismiss={() => setStackPicker(null)}
         />
       ) : null}
-      {revokedTool ? (
-        <div
-          role="status"
-          data-testid="authoring-tool-revoked-notice"
-          className="fixed top-4 left-1/2 z-[1100] -translate-x-1/2 rounded-lg border border-border bg-background/95 px-4 py-2 text-sm shadow-xl backdrop-blur"
-        >
-          <span>
-            The {revokedTool} tool is no longer available to you. Anything you
-            were drawing with it was discarded.
-          </span>
-          <button
-            type="button"
-            className="ml-3 rounded-md px-1.5 text-muted-foreground hover:text-foreground"
-            aria-label="Dismiss"
-            onClick={() => setRevokedTool(null)}
-          >
-            ×
-          </button>
-        </div>
-      ) : null}
+      {phone ? null : revokedNotice}
       <div style={{ display: playView === "playing" ? "block" : "none" }}>
         <WorldLayout
           worldId={id}
           toolRail={
-            hasToolRail && sceneId ? (
+            !phone && hasToolRail && sceneId ? (
               <GmToolRail
                 openToolId={effectiveGmToolId}
                 onOpenToolChange={setOpenGmToolId}
-                // Filtered, not merely disabled: FR-047 says a tool a person
-                // may not use is not offered. A greyed-out button still tells
-                // them the tool exists and invites them to ask why it does not
-                // work.
-                tools={railTools(
-                  [
-                    {
-                      id: "select",
-                      label: "Select",
-                      icon: "select",
-                      // A panel after all, but a collapsible one that remembers
-                      // being collapsed. The original reasoning — that an
-                      // always-open panel would cover 256px of map to say "you
-                      // may now click things" — is answered by the collapse,
-                      // not contradicted: a Game Master who does not want it
-                      // never sees it again (spec 031 FR-010).
-                      content: <SelectionFilterMenu />,
-                    },
-                    {
-                      id: "walls",
-                      label: "Walls",
-                      icon: "shield",
-                      content: (
-                        <WallTool
-                          worldStore={worldStore}
-                          walls={worldState.walls}
-                          selectedWallId={worldState.selectedWallId}
-                        />
-                      ),
-                    },
-                    {
-                      id: "lights",
-                      label: "Lights",
-                      icon: "torch",
-                      content: (
-                        <LightingTool
-                          worldStore={worldStore}
-                          lights={worldState.lights}
-                          selectedLightId={worldState.selectedLightId}
-                          tokens={worldState.tokens}
-                          ambientLight={sceneAmbient}
-                          onAmbientLightChange={
-                            sceneId ? changeSceneAmbient : undefined
-                          }
-                          timeOfDay={sceneTime}
-                          onTimeOfDayChange={
-                            sceneId ? changeSceneTime : undefined
-                          }
-                          explorationEnabled={explorationOn}
-                          onExplorationChange={
-                            sceneId ? changeExploration : undefined
-                          }
-                          onExplorationReset={
-                            sceneId ? resetExploration : undefined
-                          }
-                          players={explorationPlayers}
-                          units={sceneUnits}
-                        />
-                      ),
-                    },
-                    {
-                      id: "shapes",
-                      label: "Shapes",
-                      icon: "tokens",
-                      content: (
-                        <ShapeTool
-                          worldStore={worldStore}
-                          shapes={worldState.shapes}
-                          selectedShapeId={worldState.selectedShapeId}
-                          sceneId={sceneId}
-                          canvasContainerRef={containerRef}
-                          isGm={isSceneOwner}
-                          sceneName={selectedScene?.name}
-                        />
-                      ),
-                    },
-                    {
-                      id: "tokens",
-                      label: "Tokens",
-                      icon: "actors",
-                      content: (
-                        <TokenTool
-                          control={facets.tokens}
-                          selectedTokenId={worldState.selectedTokenId}
-                          worldId={id}
-                          sceneId={sceneId}
-                        />
-                      ),
-                    },
-                    {
-                      // Spec 030. Last in the rail because it is authored *onto*
-                      // what the other four place: you draw a wall, then decide
-                      // it is a door that opens.
-                      id: "interactions",
-                      label: "Interactions",
-                      icon: "rune",
-                      content: (
-                        <InteractionTool
-                          worldStore={worldStore}
-                          worldId={id}
-                          sceneId={sceneId}
-                          selectedTokenId={worldState.selectedTokenId}
-                          selectedWallId={worldState.selectedWallId}
-                          walls={worldState.walls}
-                          lights={worldState.lights}
-                          levels={sceneLevelList}
-                        />
-                      ),
-                    },
-                  ],
-                  allowedTools,
-                  isSceneOwner,
-                )}
+                tools={authoringTools}
               />
             ) : null
           }
           dock={
-            <WorldDock
-              sections={dockSections}
-              openSectionId={openDockSectionId}
-              onOpenSectionIdChange={setOpenDockSectionId}
-            />
+            phone ? (
+              <Suspense fallback={null}>
+                <PhoneBoard
+                  isGm={isSceneOwner}
+                  tools={authoringTools}
+                  openToolId={effectiveGmToolId}
+                  onOpenToolChange={setOpenGmToolId}
+                  sections={dockSections}
+                  openSectionId={openDockSectionId}
+                  onOpenSectionIdChange={setOpenDockSectionId}
+                  topStack={
+                    <>
+                      {takenOverNotice}
+                      {revokedNotice}
+                      {boardTop}
+                    </>
+                  }
+                  dice={dice}
+                  characterSheet={seat.characterSheet}
+                  onMe={seat.onMe}
+                  onOpenTokenTray={() => setTokenPanelOpen(true)}
+                />
+              </Suspense>
+            ) : (
+              <WorldDock
+                sections={dockSections}
+                openSectionId={openDockSectionId}
+                onOpenSectionIdChange={setOpenDockSectionId}
+              />
+            )
           }
           canvas={
             <div
@@ -738,33 +818,7 @@ export default function WorldPage() {
                * right, and the table feed the bottom. It renders nothing for
                * a player on a scene with one level, so a scene made before
                * levels existed looks exactly as it did. */}
-              <div className="pointer-events-none absolute top-3 left-1/2 z-[1040] flex max-w-[50%] -translate-x-1/2 items-center justify-center gap-2">
-                <LevelTabs
-                  levels={sceneLevelList}
-                  level={sceneLevel}
-                  isGm={isSceneOwner}
-                  selectedTokenIds={worldState.selectedTokenIds}
-                  actions={levelActions}
-                />
-                {/* How many tokens a stack click picked up; nothing for one. */}
-                <SelectionCount
-                  selectedTokenIds={worldState.selectedTokenIds}
-                />
-                {/* Spec 085 FR-018: a group in Select. Someone without a rail
-                 * is always in Select. */}
-                {!hasToolRail ||
-                (effectiveGmToolId ?? "select") === "select" ? (
-                  <SelectionBar
-                    worldStore={worldStore}
-                    isGm={isSceneOwner}
-                    walls={worldState.walls}
-                    selectedTokenIds={worldState.selectedTokenIds}
-                    selectedWallIds={worldState.selectedWallIds}
-                    selectedLightIds={worldState.selectedLightIds}
-                    selectedShapeIds={worldState.selectedShapeIds}
-                  />
-                ) : null}
-              </div>
+              {phone ? null : boardTop}
               {id ? (
                 <div
                   className="pointer-events-none absolute bottom-3 left-1/2 z-[1040] flex w-80 max-w-[40%] -translate-x-1/2 flex-col-reverse gap-2"
@@ -834,14 +888,16 @@ export default function WorldPage() {
                     zIndex: 900,
                   }}
                 >
-                  <button
-                    type="button"
-                    data-testid="token-panel-toggle-button"
-                    onClick={() => setTokenPanelOpen(true)}
-                    className="token-panel-toggle-button"
-                  >
-                    Tokens
-                  </button>
+                  {phone ? null : (
+                    <button
+                      type="button"
+                      data-testid="token-panel-toggle-button"
+                      onClick={() => setTokenPanelOpen(true)}
+                      className="token-panel-toggle-button"
+                    >
+                      Tokens
+                    </button>
+                  )}
                   <TokenPanel
                     sceneId={sceneId}
                     worldStore={worldStore}
@@ -853,21 +909,19 @@ export default function WorldPage() {
                   />
                 </div>
               ) : null}
-              <div
-                style={{
-                  position: "absolute",
-                  bottom: "1rem",
-                  // Clear of the GM tool rail (3rem) on the left.
-                  left: "4rem",
-                  zIndex: 900,
-                }}
-              >
-                <DiceRollerPanel
-                  worldId={id}
-                  engineReady={engineReady}
-                  isGameMaster={isSceneOwner}
-                />
-              </div>
+              {phone ? null : (
+                <div
+                  style={{
+                    position: "absolute",
+                    bottom: "1rem",
+                    // Clear of the GM tool rail (3rem) on the left.
+                    left: "4rem",
+                    zIndex: 900,
+                  }}
+                >
+                  {dice}
+                </div>
+              )}
             </div>
           }
         />
