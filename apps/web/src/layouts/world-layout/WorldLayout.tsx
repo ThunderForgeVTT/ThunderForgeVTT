@@ -34,7 +34,7 @@ export function WorldLayout({
 }: WorldLayoutProps) {
   return (
     <div
-      className="relative h-screen w-screen overflow-hidden"
+      className="relative h-dvh w-screen overflow-hidden"
       data-world-id={worldId}
     >
       <div className="absolute inset-0">{canvas}</div>

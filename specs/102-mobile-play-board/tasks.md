@@ -33,11 +33,13 @@ means `apps/web/src/components/world/PhoneBoard/`.
   (`pnpm -F @thunderforge/demo e2e phone-board`) and `e2e:phone:integration`
   (`node ./scripts/e2e-parallel.mjs --shards=1 --slice=phone`) to the root
   `package.json`, matching the `e2e:worlds` pattern. Confirm with
-  `pnpm e2e:which`.
-- [ ] T002 [P] Viewport meta in `apps/web/index.html` and
+  `pnpm e2e:which`. The pre-commit hook refuses entries that match no
+  tracked file, so the slice lands with the first spec file and grows its
+  `own` and `paths` as each file is created.
+- [x] T002 [P] Viewport meta in `apps/web/index.html` and
   `apps/demo/index.html`: `width=device-width, initial-scale=1,
   viewport-fit=cover, interactive-widget=resizes-content` (R5).
-- [ ] T003 [P] In `web/layouts/world-layout/WorldLayout.tsx`, `h-screen` →
+- [x] T003 [P] In `web/layouts/world-layout/WorldLayout.tsx`, `h-screen` →
   `h-dvh` (R5). Desktop renders the same.
 
 ## Phase 2: Foundational
