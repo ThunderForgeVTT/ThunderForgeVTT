@@ -161,16 +161,17 @@ Paths are relative to the repo root; `web/` means `apps/web/src/`.
 - [X] T026 [P] Update the doc comments that describe the old behaviour:
   `web/layouts/world-layout/WorldSectionShell.tsx`,
   `web/hooks/useWorldMembers.ts`, `web/hooks/useActorClaimGate.ts`.
-- [ ] T027 Checks: `tsc -b --noEmit`, eslint, prettier on touched
+- [X] T027 Checks: `tsc -b --noEmit`, eslint, prettier on touched
   `apps/web` and `apps/demo` files, `vitest run src/hooks src/pages/world`,
   and `tsc -b --noEmit` in `apps/demo`.
-- [ ] T028 Proof: `THUNDERFORGE_DISABLE_AUTH_RATE_LIMIT=1 pnpm e2e:worlds`
+- [X] T028 Proof: `THUNDERFORGE_DISABLE_AUTH_RATE_LIMIT=1 pnpm e2e:worlds`
   green; record the counts here. Slices `actors` and `scenes` green.
-- [ ] T029 Demo: `pnpm run e2e e2e/demo-pages.spec.ts e2e/demo-board.spec.ts`
+  2026-10-16: worlds 61 passed, actors 33, scenes 21; 0 failed, 0 flaky.
+- [X] T029 Demo: `pnpm run e2e e2e/demo-pages.spec.ts e2e/demo-board.spec.ts`
   in `apps/demo` (SC-005), then a plain `pnpm run build` for the phone
-  preview.
+  preview. 2026-10-16: 20 passed.
 - [ ] T030 `make ci` passes. Owner's phone check (SC-007); no push or ship
-  before the greenlight.
+  before the greenlight. 2026-10-16: `make ci` passed; phone check open.
 
 ## Dependencies
 
