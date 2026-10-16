@@ -65,7 +65,7 @@ export function DemoNotice() {
         aria-controls="demo-notice-details"
         onClick={() => setOpen((was) => !was)}
         data-testid="demo-notice-toggle"
-        className="min-h-6 font-medium sm:hidden"
+        className="min-h-6 font-medium whitespace-nowrap sm:hidden"
       >
         <strong>Demo</strong> · nothing leaves this browser{" "}
         <span aria-hidden="true">{open ? "▾" : "▸"}</span>

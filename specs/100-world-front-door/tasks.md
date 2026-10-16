@@ -46,5 +46,5 @@
 
 ## Phase 7: Review
 
-- [ ] T016 Screenshots before and after at 390, 1440 and 3440 for the
+- [x] T016 Screenshots before and after at 390, 1440 and 3440 for the
   owner, phone included (SC-008). Ships only on the owner's greenlight.
