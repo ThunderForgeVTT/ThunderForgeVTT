@@ -46,14 +46,14 @@ means `apps/web/src/components/world/PhoneBoard/`.
 
 **Blocks every story.**
 
-- [ ] T004 Write `web/hooks/usePhoneLayout.test.ts` (vitest, jsdom, a
+- [x] T004 Write `web/hooks/usePhoneLayout.test.ts` (vitest, jsdom, a
   stubbed `matchMedia` whose `change` listeners the test fires): false at
   1280×800 and 820×1180, true at 412×915 and 915×412, flips when the query
   changes. See it fail.
-- [ ] T005 Create `web/hooks/usePhoneLayout.ts`: `useSyncExternalStore` over
+- [x] T005 Create `web/hooks/usePhoneLayout.ts`: `useSyncExternalStore` over
   `matchMedia("(max-width: 599px), (max-height: 599px)")`, server snapshot
   `false` (R1). T004 passes.
-- [ ] T006 Write `pb/__tests__/phoneRows.test.ts` for
+- [x] T006 Write `pb/__tests__/phoneRows.test.ts` for
   `phoneRows(isGm, permittedTools, sections)` per data-model.md: player row
   ids `me, dice, sheet, chat, more`; GM row `tools, dice, actors, chat,
   combat`; GM groups `board` (permitted tools in `GM_TOOL_IDS` order, then
@@ -62,7 +62,7 @@ means `apps/web/src/components/world/PhoneBoard/`.
   sections, granted tools and `fullscreen`; a section or tool absent from
   the input never appears (FR-006); Trusted Player input gives the player
   rows. See it fail.
-- [ ] T007 Create `pb/phoneRows.ts` with the `RowItem`/group types from
+- [x] T007 Create `pb/phoneRows.ts` with the `RowItem`/group types from
   data-model.md, labels and `FantasyIcon` names reused from `GmToolRail.tsx`
   and `WorldDock.tsx` (export their maps if they are module-private). T006
   passes.
