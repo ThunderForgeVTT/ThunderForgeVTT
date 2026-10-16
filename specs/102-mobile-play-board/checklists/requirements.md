@@ -35,5 +35,11 @@
   every tool; a player's four jobs), so no clarification markers were needed.
 - The one technical name left in the spec, `crypto.randomUUID`, is in Out of
   Scope as the record of a separate defect, not a requirement.
+- Revised the same day at the owner's word ("take what you can and spec it"):
+  floating controls instead of bars, a bottom row in thumb reach, and an
+  installable app with a full-screen control (User Story 6, FR-025 to
+  FR-029). Re-validated; every item still passes. "Installable" and "full
+  screen" are named as what a person sees, not as the technology behind them.
 - Defaults chosen and recorded under Assumptions: the 600 px shorter-side
-  threshold, the 44 px touch size, Trusted Player = player view on the board.
+  threshold, the 44 px touch size, Trusted Player = player view on the board,
+  the demo gets full screen but is not installable, no offline cache.

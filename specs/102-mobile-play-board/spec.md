@@ -11,7 +11,11 @@
 mobile something cleaner for admin vs user view". Answers the same day: a Game
 Master keeps every tool on a phone, reorganised rather than removed; a player's
 phone is for moving their token, rolling dice, their character sheet, and chat
-and initiative.
+and initiative. Later the same day, on the board over https: "maybe we renove
+the black bars and just have the icons? maybe we spa the thing so its
+installable as an \"app\"", and then "take what you can and spec it": the
+floating controls, the bottom bar within thumb reach, and an installable app
+with a full-screen mode.
 
 ## Why
 
@@ -30,19 +34,25 @@ Measured on the demo board at 412 × 915 (a Galaxy S23 Ultra in portrait),
   18.
 - A player gets 7 of the Game Master's 12 controls, and their Select filter
   offers Walls and Lights, which a player cannot edit.
+- The controls sit at the top corners, out of a thumb's reach on a tall phone
+  held in one hand.
+- The browser's own address bar takes about 7% of the screen's height, and
+  there is no way to put the board on the home screen.
 
 Spec 069 made the board itself answer a finger. This spec is about everything
-around it: on a phone the map is the screen, and the rest comes when asked
-for.
+around it: on a phone the map is the screen, edge to edge, and the rest comes
+when asked for, from a bar at the bottom where the thumb already is.
 
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - A player plays from their phone (Priority: P1)
 
-A player joins a session from their phone. The map fills the screen. What
-they came to do is each one tap away: find and move their character, roll,
-open their sheet, read chat and see whose turn it is. Nothing on screen is a
-tool they are not allowed to use.
+A player joins a session from their phone. The map fills the screen, edge to
+edge, with no bars down its sides. A short row of buttons along the bottom,
+in reach of the thumb holding the phone, holds what they came to do: find and
+move their character, roll, open their sheet, read chat, and a "more" for the
+rest. Whose turn it is shows above the row while combat runs. Nothing on
+screen is a tool they are not allowed to use.
 
 **Why this priority**: Players are most of the people at a table, and a phone
 is what a player in the room, or on a couch, has in hand. Today they get the
@@ -55,8 +65,9 @@ each of the four jobs from the board and come back.
 **Acceptance Scenarios**:
 
 1. **Given** a player opens the board on a phone, **When** it finishes
-   loading, **Then** the map takes at least 85% of the screen and no panel is
-   open.
+   loading, **Then** the map reaches every edge of the screen, the only
+   controls on it are the bottom row (and the turn line in combat), the map
+   is uncovered on at least 85% of the screen, and no panel is open.
 2. **Given** the player has a character on this scene, **When** they tap
    their character control, **Then** the view moves to their token and
    selects it, ready to move.
@@ -78,7 +89,8 @@ each of the four jobs from the board and come back.
 ### User Story 2 - A Game Master runs the table from a phone (Priority: P1)
 
 A Game Master opens their world on a phone. They see the same uncluttered map
-a player does, plus one way into all their tools. Every tool the desktop
+and bottom row a player does, with a Tools button in it: one way into all
+their tools. Every tool the desktop
 board offers is reachable, grouped so they can find it, and the tool in hand
 shows itself without covering the map.
 
@@ -186,6 +198,42 @@ resize a board across the threshold and back with a panel and a tool open.
 
 ---
 
+### User Story 6 - The board as an app on the phone (Priority: P2)
+
+A player or Game Master who plays from their phone adds ThunderForge to their
+home screen. It opens from its own icon without the browser's address bar,
+straight into the app. Someone who does not install it can still take the
+board full screen from the board itself.
+
+**Why this priority**: The browser's bar costs about 7% of the screen that
+the rest of this spec works to give back to the map, and a home-screen icon
+is how people expect to come back to something they use every session.
+
+**Independent Test**: On an Android phone in Chrome, install the app from the
+browser's menu or its install prompt, open it from the home screen, and reach
+a world's board with no browser bar showing. Separately, in the browser, use
+the board's full-screen control and leave full screen again.
+
+**Acceptance Scenarios**:
+
+1. **Given** the app in a browser that can install web apps, **When** the
+   person installs it, **Then** it appears on the home screen with
+   ThunderForge's name and icon.
+2. **Given** the installed app, **When** it is opened from the home screen,
+   **Then** it shows without the browser's address bar, with colours that
+   match the app in the system bars, and signs in as the browser does.
+3. **Given** the board in a browser that supports full screen, **When** the
+   person uses the full-screen control, **Then** the board fills the whole
+   screen, and the same control or the system back gesture leaves it.
+4. **Given** a browser that cannot take a page full screen, **When** the
+   board shows, **Then** there is no full-screen control rather than one that
+   does nothing.
+5. **Given** the installed app, **When** the phone is offline, **Then** it
+   says it needs a connection, as the site does in a browser; no world's data
+   or images are kept on the phone for offline use.
+
+---
+
 ### Edge Cases
 
 - A player with no token on this scene: the character control says so and
@@ -208,6 +256,12 @@ resize a board across the threshold and back with a panel and a tool open.
   fit and nothing is cut off.
 - Several sheets asked for at once (a request arrives while chat is open):
   one sheet shows at a time, and the waiting item is signalled, not stacked.
+- A very bright or very dark map under a floating control: the control stays
+  readable against either.
+- The board is already in full screen or opened as the installed app: the
+  full-screen control is not shown or shows as "leave full screen".
+- An update is published while the installed app is open: the next open gets
+  the new version, as a browser tab would.
 
 ## Requirements *(mandatory)*
 
@@ -218,17 +272,22 @@ resize a board across the threshold and back with a panel and a tool open.
 - **FR-001**: The board MUST use a phone layout when the viewport's shorter
   side is below the phone threshold (see Assumptions), and today's layout
   otherwise.
-- **FR-002**: In the phone layout, with nothing open, the board MUST show the
-  map with only the controls this spec names; no rail stands along the full
-  height of the screen.
+- **FR-002**: In the phone layout, with nothing open, the map MUST reach every
+  edge of the screen. No bar or rail stands along its sides; the only controls
+  on it are the ones this spec names, each floating over the map on its own
+  small backing.
+- **FR-002a**: Each floating control MUST keep a contrast of at least 3:1
+  against whatever part of the map is under it, light or dark.
+- **FR-002b**: The everyday controls MUST sit in a single row along the bottom
+  of the screen, within reach of the thumb of the hand holding the phone.
 - **FR-003**: Crossing the threshold in either direction MUST keep the open
   panel, the chosen tool and the view of the map.
 
 **What a player sees**
 
-- **FR-004**: A player's phone board MUST offer, each one tap from the map:
+- **FR-004**: A player's bottom row MUST offer, each one tap from the map:
   their character (find and select their token), the dice, their character
-  sheet, and chat.
+  sheet, chat, and "more".
 - **FR-005**: While combat runs, a player's phone board MUST show whose turn it
   is without opening anything.
 - **FR-006**: A player's phone board MUST NOT show any control for a tool or
@@ -241,7 +300,8 @@ resize a board across the threshold and back with a panel and a tool open.
 **What a Game Master sees**
 
 - **FR-008**: A Game Master's phone board MUST reach every board tool and every
-  panel that their desktop board offers, from one entry point on the map.
+  panel that their desktop board offers, from one Tools button in their
+  bottom row.
 - **FR-009**: The Game Master's tools MUST be grouped by what they act on: the
   board (Select, Walls, Lights, Shapes, Tokens, Interactions, Levels) and the
   table (Chat, Actors, Combat, Player requests, Settings, About & feedback).
@@ -284,9 +344,25 @@ resize a board across the threshold and back with a panel and a tool open.
   engine's; this spec changes the controls around the map only.
 - **FR-024**: The phone layout MUST work in the app and in the demo.
 
+**An app on the phone**
+
+- **FR-025**: The web app MUST be installable to a phone's home screen from
+  browsers that offer it, with ThunderForge's name, icon and colours.
+- **FR-026**: Opened from the home screen, the app MUST show without the
+  browser's address bar, and open where a person starts in the app today.
+- **FR-027**: Installing MUST NOT keep any world's data or images on the
+  device for offline use; the app needs a connection exactly as the site
+  does. (Spec 028 retired the only offline cache on purpose: it outlived a
+  member's removal from a world.)
+- **FR-028**: The phone board MUST offer a full-screen control where the
+  browser supports it and hide it where it does not, and full screen MUST be
+  left by the same control or the system back gesture.
+- **FR-029**: In the demo, the full-screen control MUST work as in the app; the
+  demo itself need not be installable.
+
 **Accessibility**
 
-- **FR-025**: The phone layout MUST meet WCAG 2.2 AA, including reflow at 200%
+- **FR-030**: The phone layout MUST meet WCAG 2.2 AA, including reflow at 200%
   text, visible focus, names for every control, and sheets that hold and
   return focus.
 
@@ -297,6 +373,8 @@ resize a board across the threshold and back with a panel and a tool open.
 - **Viewer role on the board**: Game Master (owner included) or player
   (Trusted Player included), as the server already reports it. It picks which
   controls the phone layout offers.
+- **Bottom row**: the few everyday controls along the bottom of a phone
+  screen; its buttons depend on the viewer's role.
 - **Sheet**: a panel shown over the lower part of a phone screen, with a
   smaller and a full size.
 
@@ -316,8 +394,13 @@ resize a board across the threshold and back with a panel and a tool open.
   another, and none is smaller than 44 × 44 pixels to the touch.
 - **SC-005**: A player's phone board shows no control the player cannot use.
 - **SC-006**: The existing board tests at desktop size pass unchanged.
-- **SC-007**: The owner plays a session's worth of the demo on their phone, as
-  a Game Master and as a player, and greenlights it before anything ships.
+- **SC-007**: On an Android phone, the app installs from Chrome, opens from
+  the home screen without the address bar, and reaches a world's board.
+- **SC-008**: On a phone, the board's full-screen control hides the browser's
+  bar, and leaving full screen restores it.
+- **SC-009**: The owner plays a session's worth of the demo on their phone, as
+  a Game Master and as a player, opens the installed app, and greenlights
+  it before anything ships.
 
 ## Assumptions
 
@@ -333,6 +416,12 @@ resize a board across the threshold and back with a panel and a tool open.
   an open sheet or the expanded dice do not count against them.
 - **Spec 069's touch input** is how a player moves their token once it is
   selected; this spec does not change gestures on the map.
+- **Installing is for the app, not the demo**: the demo is a try-out a
+  visitor opens once; it gets the full-screen control, not a home-screen
+  icon.
+- **iPhones**: Safari can add the app to the home screen but cannot take a
+  page full screen, so iPhones get the installed app and no full-screen
+  control (FR-028).
 - **Today's limits apply**: Chromium is the supported browser. The owner's
   phone test uses Firefox as well, and it is worth what it finds, but it is
   not a gate.
@@ -342,6 +431,9 @@ resize a board across the threshold and back with a panel and a tool open.
 - The world's other pages (Overview, Players, Scenes, Compendium, Settings).
 - Gestures on the map, and anything else the engine draws.
 - A tablet layout of its own.
+- Offline play, and any cache of world data or images on the device.
+- A native app or an app store listing; an installable web app is the
+  answer for now.
 - **Recorded, not fixed here**: `crypto.randomUUID` exists only in a secure
   context. A phone opening a dev or self-hosted server by plain `http://` LAN
   address gets a board that throws on load ("Something went wrong on this
