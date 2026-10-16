@@ -37,7 +37,7 @@ description: "Task list for spec 103, Tokens Talk"
   - `resolve_speaker(conn, world_id, scene_id: Option<Uuid>, user_id, token_id) -> Result<(Uuid, String)>` returns the token id and its real name, or FORBIDDEN "You can't speak as that token". It uses `crate::combat::controllers::may_move` and `is_dm_of_world`.
   - `speaker_label_for(conn, is_gm, token_id, stored_label)` applies research R5.
   - T004 must pass.
-- [ ] T006 Wire the chat side in crates/thunderforge-server/src/graphql/mutations_chat.rs:
+- [X] T006 Wire the chat side in crates/thunderforge-server/src/graphql/mutations_chat.rs:
   - `SendChatMessageInput.speakerTokenId: Option<Uuid>`
   - `send_chat_message_impl` calls `resolve_speaker` before the insert and stores both columns
   - `GraphQLChatMessage` gains `speaker_token_id` and `speaker_label`, the latter resolved per viewer with `speaker_label_for` in the query that lists messages

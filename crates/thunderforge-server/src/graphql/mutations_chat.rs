@@ -28,6 +28,7 @@ use diesel::prelude::*;
 use uuid::Uuid;
 
 use crate::auth::world_membership::{is_dm_of_world, require_world_member};
+use crate::graphql::speaker::{readable_speakers, resolve_speaker, speaker_label};
 use crate::graphql::{app_state, authenticated_user};
 use crate::models::{ChatMessage, NewChatMessage};
 use crate::play_pause::gate::refuse_if_paused;
@@ -55,6 +56,12 @@ pub struct GraphQLChatMessage {
     pub body: String,
     pub gm_only: bool,
     pub created_at: chrono::NaiveDateTime,
+    /// Spec 103: the token the line was said as; `None` when said as the
+    /// author.
+    pub speaker_token_id: Option<Uuid>,
+    /// Spec 103: that token's name, or "Someone" for a player who may not
+    /// read it (`speaker::speaker_label`).
+    pub speaker_label: Option<String>,
 }
 
 impl From<ChatMessage> for GraphQLChatMessage {
@@ -68,6 +75,8 @@ impl From<ChatMessage> for GraphQLChatMessage {
             body: row.body,
             gm_only: row.gm_only,
             created_at: row.created_at,
+            speaker_token_id: row.speaker_token_id,
+            speaker_label: row.speaker_label,
         }
     }
 }
@@ -82,6 +91,9 @@ pub struct SendChatMessageInput {
     /// downgraded, so a confused client never quietly posts to everyone
     /// something the sender believed was private.
     pub gm_only: Option<bool>,
+    /// Spec 103: say it as this token. Verified like `gm_only`: a token the
+    /// sender may not speak as is refused, never dropped.
+    pub speaker_token_id: Option<Uuid>,
 }
 
 /// Trims and length-checks a message body.
@@ -121,6 +133,7 @@ pub async fn send_chat_message_impl(
     let world_id = input.world_id;
     let scene_id = input.scene_id;
     let wants_gm_only = input.gm_only.unwrap_or(false);
+    let speaker_token_id = input.speaker_token_id;
 
     if wants_gm_only && !is_dm_of_world(state, user_id, is_admin, world_id).await? {
         return Err(Error::new("Only the GM may send a GM-only message"));
@@ -135,6 +148,10 @@ pub async fn send_chat_message_impl(
         require_world_member(&mut conn, user_id, world_id)
             .map_err(|_| Error::new("You are not a member of this world"))?;
         refuse_if_paused(&mut conn, world_id)?;
+        let speaker = speaker_token_id
+            .map(|token| resolve_speaker(&mut conn, world_id, scene_id, user_id, is_admin, token))
+            .transpose()?;
+        let (speaker_token_id, speaker_label) = speaker.unzip();
 
         // Captured once, at send time — `author_label` is denormalized so
         // history keeps reading correctly after a rename.
@@ -152,8 +169,8 @@ pub async fn send_chat_message_impl(
             author_label,
             body,
             gm_only: wants_gm_only,
-            speaker_token_id: None,
-            speaker_label: None,
+            speaker_token_id,
+            speaker_label,
         };
 
         let message = diesel::insert_into(world_chat_messages::table)
@@ -195,38 +212,53 @@ pub async fn world_chat_messages_impl(
         .get()
         .map_err(|_| Error::new("Failed to get DB connection"))?;
 
-    let messages = tokio::task::spawn_blocking(move || -> Result<Vec<ChatMessage>, String> {
-        require_world_member(&mut conn, user_id, world_id)
-            .map_err(|_| "You are not a member of this world".to_string())?;
+    let messages =
+        tokio::task::spawn_blocking(move || -> Result<Vec<GraphQLChatMessage>, String> {
+            require_world_member(&mut conn, user_id, world_id)
+                .map_err(|_| "You are not a member of this world".to_string())?;
 
-        // Newest-first with a LIMIT is what the index is for; the caller
-        // reverses into reading order below. Selecting oldest-first would
-        // mean scanning the whole world's history to find the tail.
-        let mut query = world_chat_messages::table
-            .filter(world_chat_messages::world_id.eq(world_id))
-            .into_boxed();
+            // Newest-first with a LIMIT is what the index is for; the caller
+            // reverses into reading order below. Selecting oldest-first would
+            // mean scanning the whole world's history to find the tail.
+            let mut query = world_chat_messages::table
+                .filter(world_chat_messages::world_id.eq(world_id))
+                .into_boxed();
 
-        if !is_gm {
-            query = query.filter(world_chat_messages::gm_only.eq(false));
-        }
+            if !is_gm {
+                query = query.filter(world_chat_messages::gm_only.eq(false));
+            }
 
-        query
-            .order(world_chat_messages::created_at.desc())
-            .limit(limit)
-            .select(ChatMessage::as_select())
-            .load::<ChatMessage>(&mut conn)
-            .map_err(|e| format!("Failed to load messages: {e}"))
-    })
-    .await
-    .map_err(|_| Error::new("Failed to spawn blocking task"))?
-    .map_err(Error::new)?;
+            let rows = query
+                .order(world_chat_messages::created_at.desc())
+                .limit(limit)
+                .select(ChatMessage::as_select())
+                .load::<ChatMessage>(&mut conn)
+                .map_err(|e| format!("Failed to load messages: {e}"))?;
+
+            // Spec 103 R5: a speaker's name only where this viewer may read it.
+            let readable =
+                readable_speakers(&mut conn, is_gm, rows.iter().map(|m| m.speaker_token_id))
+                    .map_err(|e| format!("Failed to load speakers: {e}"))?;
+            Ok(rows
+                .into_iter()
+                .map(|row| {
+                    let mut message = GraphQLChatMessage::from(row);
+                    message.speaker_label = speaker_label(
+                        is_gm,
+                        &readable,
+                        message.speaker_token_id,
+                        message.speaker_label.take(),
+                    );
+                    message
+                })
+                .collect())
+        })
+        .await
+        .map_err(|_| Error::new("Failed to spawn blocking task"))?
+        .map_err(Error::new)?;
 
     // Oldest-first for rendering.
-    Ok(messages
-        .into_iter()
-        .rev()
-        .map(GraphQLChatMessage::from)
-        .collect())
+    Ok(messages.into_iter().rev().collect())
 }
 
 #[derive(Default)]
@@ -263,6 +295,10 @@ impl ChatQuery {
         world_chat_messages_impl(state, user.user_id, user.is_admin, world_id, limit).await
     }
 }
+
+#[cfg(test)]
+#[path = "mutations_chat_tests.rs"]
+mod speaker_tests;
 
 #[cfg(test)]
 mod tests {
