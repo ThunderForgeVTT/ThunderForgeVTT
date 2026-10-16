@@ -1,5 +1,6 @@
 import { createElement, lazy, type ComponentType, type ReactNode } from "react";
 import { LazyBoundary } from "./LazyBoundary";
+import { retryImport } from "./retryImport";
 
 /**
  * A component whose code arrives the first time it is rendered (spec 068).
@@ -17,7 +18,7 @@ export function onDemand<P extends object>(
   what: string,
   fallback: ReactNode = null,
 ): ComponentType<P> {
-  const Loaded = lazy(load) as unknown as ComponentType<P>;
+  const Loaded = lazy(retryImport(load)) as unknown as ComponentType<P>;
   function OnDemand(props: P) {
     return createElement(LazyBoundary, {
       what,

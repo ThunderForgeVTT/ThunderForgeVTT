@@ -1,15 +1,18 @@
 import { lazy, type ComponentProps } from "react";
 import { LazyBoundary } from "@/components/ui/lazy-boundary/LazyBoundary";
 import type { FeedbackDialog } from "./FeedbackDialog";
+import { retryImport } from "@/components/ui/lazy-boundary/retryImport";
 
 // Spec 068 FR-001: the form, its review step, the screenshot and redaction
 // code are needed by a press, not by a page load, and the launcher is in the
 // entry. What has to be running before anything can throw — log capture —
 // stays there (`main.tsx`).
-const Dialog = lazy(() =>
-  import("./FeedbackDialog").then((module) => ({
-    default: module.FeedbackDialog,
-  })),
+const Dialog = lazy(
+  retryImport(() =>
+    import("./FeedbackDialog").then((module) => ({
+      default: module.FeedbackDialog,
+    })),
+  ),
 );
 
 /**

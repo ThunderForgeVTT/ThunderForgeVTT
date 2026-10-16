@@ -8,6 +8,7 @@ import { usePlayPauseRedirect } from "@/hooks/usePlayPauseRedirect";
 import { MainLayout } from "@/layouts/main-layout/MainLayout";
 import type { SetupStatus } from "@/types/auth";
 import { pageLoaders } from "./pageLoaders";
+import { retryImport } from "@/components/ui/lazy-boundary/retryImport";
 
 const LoginPage = lazy(pageLoaders.login);
 const RegisterPage = lazy(pageLoaders.signup);
@@ -34,18 +35,22 @@ const WorldCompendiumRoutePage = lazy(pageLoaders.worldCompendium);
   item, which is what that registry exists to serve.
 */
 const NpcEditorPage = lazy(
-  () => import("@/pages/world/compendium/NpcEditorPage"),
+  retryImport(() => import("@/pages/world/compendium/NpcEditorPage")),
 );
 const ItemEditorPage = lazy(
-  () => import("@/pages/world/compendium/ItemEditorPage"),
+  retryImport(() => import("@/pages/world/compendium/ItemEditorPage")),
 );
 /*
   Spec 051: where a paused world's table is sent, and where an operator pauses
   one. Not in `pageLoaders` for the same reason as the editors above: nothing
   prefetches them. The notice is reached by a pause, not by a nav item.
 */
-const PlayPausedPage = lazy(() => import("@/pages/world/PlayPausedPage"));
-const AdminPlayPausesPage = lazy(() => import("@/pages/admin/PlayPausesPage"));
+const PlayPausedPage = lazy(
+  retryImport(() => import("@/pages/world/PlayPausedPage")),
+);
+const AdminPlayPausesPage = lazy(
+  retryImport(() => import("@/pages/admin/PlayPausesPage")),
+);
 const ScenesRoutePage = lazy(pageLoaders.worldScenes);
 const SceneDetailRoutePage = lazy(pageLoaders.worldSceneDetail);
 const PlayersRoutePage = lazy(pageLoaders.worldPlayers);
@@ -65,7 +70,7 @@ const WorldCollectionsPage = lazy(pageLoaders.worldCollections);
 const WorldSystemSettingsPage = lazy(pageLoaders.worldSystemSettings);
 const StorageSettingsPage = lazy(pageLoaders.storageSettings);
 const FeedbackSettingsPage = lazy(
-  () => import("@/pages/user/FeedbackSettingsPage"),
+  retryImport(() => import("@/pages/user/FeedbackSettingsPage")),
 );
 /*
   Spec 049 US3 / spec 050 US1: the account's own shelf. Declared here rather
@@ -73,7 +78,9 @@ const FeedbackSettingsPage = lazy(
   prefetches it, because it is reached by a deliberate visit rather than by
   hovering a nav item.
 */
-const LibraryPage = lazy(() => import("@/pages/library/LibraryPage"));
+const LibraryPage = lazy(
+  retryImport(() => import("@/pages/library/LibraryPage")),
+);
 const SecuritySettingsPage = lazy(pageLoaders.securitySettings);
 const StandingPage = lazy(pageLoaders.standing);
 const AccountSettingsPage = lazy(pageLoaders.accountSettings);

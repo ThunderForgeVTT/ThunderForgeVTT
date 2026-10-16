@@ -1,3 +1,4 @@
+import { retry, type Backoff } from "@thunderforge/retry";
 import { withCsrf } from "@/api/auth";
 import { withLastEvent } from "@/api/lastEvent";
 import { traceRequest } from "@/api/requestTracing";
@@ -160,6 +161,19 @@ export function operationNameOf(query: string): string | undefined {
   )?.[1];
 }
 
+/**
+ * Whether a document only reads. A query that never reached the server is
+ * sent again; a mutation never is, since one that seemed to fail may have
+ * landed.
+ */
+export function isQuery(query: string): boolean {
+  return /^\s*(?:query\b|\{)/.test(query);
+}
+
+/** How a read that could not reach the server tries again. */
+const QUERY_RETRIES = 2;
+const TRANSPORT_BACKOFF: Backoff = { baseMs: 250, maxMs: 2000, jitter: "full" };
+
 function collectMessages(errors: GraphQLErrorEntry[] | undefined): string[] {
   return (errors ?? [])
     .map((e) => e?.message)
@@ -281,6 +295,7 @@ async function send(
   init: RequestInit,
   operation: string | undefined,
   timeoutMs: number | null,
+  retries = 0,
 ): Promise<Response> {
   const controller = timeoutMs === null ? null : new AbortController();
   const timer =
@@ -289,7 +304,15 @@ async function send(
       : setTimeout(() => controller.abort(), timeoutMs ?? 0);
 
   try {
-    return await fetch(url, { ...init, signal: controller?.signal });
+    // A dropped connection is retried within the timeout, never a timeout.
+    return await retry(
+      () => fetch(url, { ...init, signal: controller?.signal }),
+      {
+        ...TRANSPORT_BACKOFF,
+        retries,
+        shouldRetry: () => !controller?.signal.aborted,
+      },
+    );
   } catch {
     if (controller?.signal.aborted) {
       throw new GraphQLRequestError(
@@ -375,6 +398,7 @@ export async function postGraphQL<TData>(
       },
       operation,
       options.timeoutMs === undefined ? DEFAULT_TIMEOUT_MS : options.timeoutMs,
+      isQuery(query) ? QUERY_RETRIES : 0,
     );
 
     const data = unwrap<TData>(

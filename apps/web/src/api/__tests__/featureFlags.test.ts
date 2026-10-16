@@ -37,7 +37,10 @@ const OFF: Reply = [{ key: "feature.book_import", on: false }];
 
 describe("feature flags", () => {
   beforeEach(forgetFeatureFlags);
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
 
   it("asks the route a visitor can reach when nobody is signed in", async () => {
     const fetchMock = answerWith([], ON);
@@ -80,11 +83,14 @@ describe("feature flags", () => {
   });
 
   it("asks again after a read that failed", async () => {
-    const fetchMock = answerWith(new TypeError("offline"), ON);
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    // Offline through the read's own retries.
+    const offline = new TypeError("offline");
+    const fetchMock = answerWith(offline, offline, offline, ON);
     await loadFeatureFlags("a");
     expect(currentFeatureFlags()).toEqual({});
     await loadFeatureFlags("a");
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
     expect(currentFeatureFlags()).toEqual({ "feature.book_import": true });
   });
 });

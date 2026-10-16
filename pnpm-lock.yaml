@@ -20,6 +20,9 @@ importers:
       '@thunderforge/heroes':
         specifier: workspace:^
         version: link:../../packages/heroes
+      '@thunderforge/retry':
+        specifier: workspace:^
+        version: link:../../packages/retry
       '@thunderforge/telemetry':
         specifier: workspace:^
         version: link:../../packages/telemetry
@@ -258,6 +261,9 @@ importers:
       '@thunderforge/pdf':
         specifier: workspace:^
         version: link:../../dist/pdf
+      '@thunderforge/retry':
+        specifier: workspace:^
+        version: link:../../packages/retry
       '@thunderforge/telemetry':
         specifier: workspace:^
         version: link:../../packages/telemetry
@@ -398,8 +404,6 @@ importers:
         specifier: ^4.1.11
         version: 4.1.11(@types/node@26.2.0)(vite@8.0.10(@types/node@26.2.0)(jiti@2.7.0)(sass@1.99.0)(terser@5.46.2))
 
-  dist/dice: {}
-
   dist/engine: {}
 
   dist/pdf: {}
@@ -464,6 +468,15 @@ importers:
         version: 6.0.3
 
   packages/heroes:
+    devDependencies:
+      '@types/node':
+        specifier: ^26.2.0
+        version: 26.2.0
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+
+  packages/retry:
     devDependencies:
       '@types/node':
         specifier: ^26.2.0

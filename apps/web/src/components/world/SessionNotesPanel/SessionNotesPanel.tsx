@@ -4,10 +4,13 @@ import { lazy, Suspense, useMemo, useState } from "react";
 import { updateWorldSessionNotes } from "@/api/world";
 import { Button } from "@/components/ui/button/Button";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
+import { retryImport } from "@/components/ui/lazy-boundary/retryImport";
 
 // Lazy: CodeMirror is only needed by a GM actually editing notes, not by
 // every visitor of Session Setup (see MarkdownCodeEditor.tsx's own docs).
-const MarkdownCodeEditor = lazy(() => import("./MarkdownCodeEditor"));
+const MarkdownCodeEditor = lazy(
+  retryImport(() => import("./MarkdownCodeEditor")),
+);
 
 export interface SessionNotesPanelProps {
   worldId: string;
