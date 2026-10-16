@@ -1,6 +1,7 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import { prefetchPage } from "@/routes/pageLoaders";
 import type { PrefetchablePage } from "@/routes/pageLoaders";
+import { appHref } from "@/lib/appHref";
 import { cn } from "@/lib/utils";
 import { IN_DEMO } from "@/lib/demoBuild";
 import { Avatar } from "@/components/ui/avatar/Avatar";
@@ -83,7 +84,7 @@ export function AppHeader({ brandHref, navItems }: AppHeaderProps) {
           className="inline-flex min-w-0 items-center gap-3"
         >
           <img
-            src="/brand-mark.svg"
+            src={appHref("/brand-mark.svg")}
             alt=""
             width={40}
             height={40}
