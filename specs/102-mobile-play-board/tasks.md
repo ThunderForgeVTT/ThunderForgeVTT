@@ -150,6 +150,22 @@ means `apps/web/src/components/world/PhoneBoard/`.
   (`useCharacterRoller` shares the picker and result with the roll buttons).
   *Done note*: applies to the desktop dock too, since the owner asked for a
   cleaner sheet generally; `system-roll-for-shoes.spec.ts` now taps Edit.
+- [x] T047 [US1] T017 feedback, round 2: dice state lives in `useDiceRoller`
+  on `WorldPage`, so closing and reopening the tray keeps formula and result;
+  quick d20/d12/d10/d8/d6/d4/coin buttons; the T045 hot bar is withdrawn
+  (rolls sit under the sheet with thumb-sized rows, only the last result is
+  pinned, an attack scrolls into view); the chat sheet is a fixed height with
+  its log opening on the newest message and the composer always visible
+  (`BoardSheet` `fill`).
+- [ ] T048 [US1] T017 feedback: a "Simplified board" preference in settings
+  (Automatic, the default, follows screen size as today; On; Off), so a
+  touch laptop can keep the full board and a small window can choose the
+  simple one. `usePhoneLayout` reads the preference before the media query.
+- [x] T049 T017 feedback, specced as `specs/103-tokens-talk`: chat and roll floats above the
+  token that spoke or rolled (name; roll type and result, no formula), a
+  right-edge stack for tokens off screen, newest first, rising and fading
+  after a few seconds; opening chat clears them. Needs engine work (token
+  screen positions or an engine-drawn bubble).
 - [ ] T018 [P] [US1] Create `web/hooks/useActiveCombat.ts` lifted from
   `PlayDock/CombatPanel.tsx` (`getActiveCombat` + `subscribeToWorldEvents`)
   and make `CombatPanel` use it; `play-panels-by-role.spec.ts` still passes.
