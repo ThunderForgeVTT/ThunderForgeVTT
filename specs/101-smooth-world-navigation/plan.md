@@ -20,15 +20,16 @@ when the signed-in user changes. No new dependency.
 **Language/Version**: TypeScript 5, React 19 (apps/web, apps/demo)
 **Primary Dependencies**: React context only; react-router 7 (existing)
 **Storage**: in-memory, per tab; nothing persisted
-**Testing**: vitest (store unit tests), Playwright e2e (`worlds` slice),
-demo e2e
+**Testing**: vitest in the node environment for the store's pure
+functions (apps/web has no DOM test setup and this spec adds none),
+Playwright e2e (`worlds` slice), demo e2e
 **Target Platform**: browsers; web app and the in-browser demo
 **Project Type**: web app (pnpm workspace)
 **Performance Goals**: no full-screen loader on a world page after the
 world's first page in a tab; one request per key per world in flight
 **Constraints**: no query library (FR-010); a player never sees GM controls
 (FR-006); no state carries across users (FR-007)
-**Scale/Scope**: 6 route pages, 4 hooks, 1 provider; ~10 files
+**Scale/Scope**: 6 route pages, 4 hooks, 1 provider, 1 store module; ~15 files
 
 ## Constitution Check
 
@@ -70,6 +71,7 @@ specs/101-smooth-world-navigation/
 ├── quickstart.md      # Phase 1
 ├── contracts/
 │   └── world-chrome.md  # the hooks pages call
+├── tasks.md
 └── checklists/requirements.md
 ```
 
@@ -77,7 +79,8 @@ specs/101-smooth-world-navigation/
 
 ```text
 apps/web/src/hooks/
-├── world-chrome-context.ts   # widen WorldChrome; in-flight dedupe; useWorldChromeRefresh
+├── world-chrome-store.ts     # new: pure patch, in-flight join, refusal test
+├── world-chrome-context.ts   # widen WorldChrome; useKnownWorld
 ├── WorldChromeProvider.tsx   # reset on user change; dedupe map
 ├── useWorldMembers.ts        # seed from + write to the store
 ├── useWorldRole.ts           # unchanged API; loading=false when known
@@ -104,8 +107,8 @@ React glue with no logic worth a port.
 
 1. **Store** — widen `WorldChrome` (data-model.md), dedupe in-flight reads
    per `worldId:key`, reset on user change, add `useKnownWorld` and the
-   refresh helper. Vitest for: dedupe, reset on user change, refusal
-   forgets the world, unchanged answers do not re-render.
+   pure store functions. Vitest for: dedupe, refusal detection, unchanged
+   patches; the reset on user change is proven in e2e.
 2. **World record (US1)** — the six route pages read `useKnownWorld`; the
    loader condition becomes "world unknown". Edits (session notes, system
    settings, appearance) call `remember` with the saved record (FR-004).
