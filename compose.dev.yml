@@ -9,7 +9,7 @@ services:
   postgres:
     container_name: thunderforge-postgres
     image: postgres:18-alpine
-    restart: always
+    restart: ${RESTART_POLICY:-no}
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=password
@@ -25,7 +25,7 @@ services:
   rustfs:
     container_name: thunderforge-rustfs
     image: rustfs/rustfs:1.0.0-rc.2
-    restart: always
+    restart: ${RESTART_POLICY:-no}
     environment:
       - RUSTFS_ACCESS_KEY=${RUSTFS_ROOT_ACCESS_KEY:-thunderforge-rustfs-root}
       - RUSTFS_SECRET_KEY=${RUSTFS_ROOT_SECRET_KEY:-thunderforge-rustfs-root-secret}
@@ -47,7 +47,7 @@ services:
   mailpit:
     container_name: thunderforge-mailpit
     image: axllent/mailpit:v1.21
-    restart: always
+    restart: ${RESTART_POLICY:-no}
     environment:
       - MP_SMTP_AUTH_ACCEPT_ANY=1
       - MP_SMTP_AUTH_ALLOW_INSECURE=1

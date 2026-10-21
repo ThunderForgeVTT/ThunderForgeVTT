@@ -7,7 +7,7 @@
 services:
   postgres:
     image: postgres:18-alpine
-    restart: unless-stopped
+    restart: ${RESTART_POLICY:-no}
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=password
@@ -33,7 +33,7 @@ services:
   # credentials the server defaults to. Each shard gets its own bucket.
   rustfs:
     image: rustfs/rustfs:1.0.0-rc.2
-    restart: unless-stopped
+    restart: ${RESTART_POLICY:-no}
     environment:
       - RUSTFS_ACCESS_KEY=${RUSTFS_ROOT_ACCESS_KEY:-thunderforge-rustfs-root}
       - RUSTFS_SECRET_KEY=${RUSTFS_ROOT_SECRET_KEY:-thunderforge-rustfs-root-secret}
