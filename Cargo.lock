@@ -9174,24 +9174,20 @@ dependencies = [
 name = "thunderforge-system-blades-in-the-dark"
 version = "0.1.0"
 dependencies = [
- "async-trait",
  "inventory",
  "serde",
  "serde_json",
  "thunderforge-canvas-core",
- "tokio",
 ]
 
 [[package]]
 name = "thunderforge-system-cypher-system"
 version = "0.1.0"
 dependencies = [
- "async-trait",
  "inventory",
  "serde",
  "serde_json",
  "thunderforge-canvas-core",
- "tokio",
 ]
 
 [[package]]
@@ -9225,12 +9221,10 @@ dependencies = [
 name = "thunderforge-system-fate-core"
 version = "0.1.0"
 dependencies = [
- "async-trait",
  "inventory",
  "serde",
  "serde_json",
  "thunderforge-canvas-core",
- "tokio",
 ]
 
 [[package]]
@@ -9254,12 +9248,10 @@ dependencies = [
 name = "thunderforge-system-pathfinder2e"
 version = "0.1.0"
 dependencies = [
- "async-trait",
  "inventory",
  "serde",
  "serde_json",
  "thunderforge-canvas-core",
- "tokio",
 ]
 
 [[package]]
@@ -9298,12 +9290,10 @@ dependencies = [
 name = "thunderforge-system-year-zero-engine"
 version = "0.1.0"
 dependencies = [
- "async-trait",
  "inventory",
  "serde",
  "serde_json",
  "thunderforge-canvas-core",
- "tokio",
 ]
 
 [[package]]
