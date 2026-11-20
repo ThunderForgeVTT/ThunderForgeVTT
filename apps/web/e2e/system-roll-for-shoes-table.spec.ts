@@ -346,6 +346,8 @@ test("a Game Master and a player at one table, with no map between them", async 
     await expect(player.getByTestId("rfs-statuses")).toBeVisible({
       timeout: 15_000,
     });
+    // The sheet opens read (spec 102); Edit brings the status form.
+    await player.getByTestId("in-pane-sheet-edit").click();
     await player.getByTestId("rfs-status-name").fill("Stubbed toe");
     await player.getByTestId("rfs-status-modifier").fill("-1");
     await player.getByTestId("rfs-status-add").click();

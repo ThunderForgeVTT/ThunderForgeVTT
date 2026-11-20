@@ -194,7 +194,7 @@ export default function WorldListPage() {
                   showOwner={Boolean(includeAll && isAdmin)}
                 />
               ) : (
-                <section className="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-6">
+                <section className="grid auto-grid gap-6">
                   {entries.map((entry) => (
                     <WorldCard
                       key={entry.world.id}

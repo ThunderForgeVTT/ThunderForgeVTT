@@ -16,6 +16,8 @@ const CHAT_MESSAGE_FIELDS = `
   body
   gmOnly
   createdAt
+  speakerTokenId
+  speakerLabel
 `;
 
 type WorldChatMessagesQuery = { worldChatMessages: ChatMessageRecord[] };
@@ -43,6 +45,8 @@ export function sendChatMessage(input: {
   sceneId?: string | null;
   body: string;
   gmOnly?: boolean;
+  /** Spec 103: say it as this token; the server refuses one the sender may not. */
+  speakerTokenId?: string;
 }): Promise<ChatMessageRecord> {
   return postGraphQL<SendChatMessageMutation>(
     `

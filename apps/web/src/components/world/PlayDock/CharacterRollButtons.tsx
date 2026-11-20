@@ -1,19 +1,17 @@
-import { useState } from "react";
-
-import { rollDice } from "@/api/roll";
 import { RollResult } from "@/components/world/RollResult";
 import { RollVisibilityPicker } from "@/components/world/RollVisibility/RollVisibilityPicker";
-import { useRollVisibility } from "@/components/world/RollVisibility/useRollVisibility";
-import type { RollResolutionRecord } from "@/types/roll";
+import { cn } from "@/lib/utils";
 
 import type { CharacterRoll } from "./characterRolls";
+import type { CharacterRoller } from "./useCharacterRoller";
 
 export interface CharacterRollButtonsProps {
-  worldId: string;
   rolls: CharacterRoll[];
-  isGm: boolean;
+  roller: CharacterRoller;
   /** `in-pane` in the play dock, `sheet` on the sheet page. */
   testIdPrefix: string;
+  /** Thumb-sized rows, for the phone's sheet (spec 102). */
+  touch?: boolean;
   /**
    * Opens the attack flow for an attack entry. Left out where there is no
    * board to pick a target on, and the entry then says so (FR-014).
@@ -28,45 +26,25 @@ export interface CharacterRollButtonsProps {
  * page. A roll goes out through `rollDice` with its label and the picked
  * visibility, and reaches every board as a world event — this sheet animates
  * nothing itself, which is what lets a sheet in another tab roll onto the
- * play view. The total is shown here from the mutation's own answer.
+ * play view. The total is shown by `RollFeedback` from the mutation's own
+ * answer.
  */
 export function CharacterRollButtons({
-  worldId,
   rolls,
-  isGm,
+  roller,
   testIdPrefix,
+  touch = false,
   onAttack,
   attackUnavailable = null,
 }: CharacterRollButtonsProps) {
-  const [visibility, setVisibility] = useRollVisibility(isGm);
-  const [rolling, setRolling] = useState<string | null>(null);
-  const [result, setResult] = useState<RollResolutionRecord | null>(null);
-  const [rollError, setRollError] = useState<string | null>(null);
-
-  const handleRoll = async (roll: CharacterRoll) => {
+  const handleRoll = (roll: CharacterRoll) => {
     // Spec 046: an attack roll is an attack, aimed at something, rolled and
     // judged by the server through `makeAttack`.
     if (roll.attackAbilityId) {
       onAttack?.(roll);
       return;
     }
-    setRolling(roll.key);
-    setRollError(null);
-    setResult(null);
-    try {
-      setResult(
-        await rollDice(worldId, roll.formula, {
-          label: roll.label,
-          visibility,
-        }),
-      );
-    } catch (error) {
-      setRollError(
-        error instanceof Error ? error.message : "Failed to roll dice",
-      );
-    } finally {
-      setRolling(null);
-    }
+    void roller.roll(roll.key, roll.label, roll.formula);
   };
 
   /** Why an attack entry cannot be used here, or `null` if it can. */
@@ -77,57 +55,80 @@ export function CharacterRollButtons({
   };
 
   return (
-    <>
-      <ul className="grid gap-1">
-        {rolls.map((roll) => {
-          const blocked = attackBlocked(roll);
-          return (
-            <li key={roll.key}>
-              <button
-                type="button"
-                disabled={rolling !== null || blocked !== null}
-                title={blocked ?? undefined}
-                onClick={() => void handleRoll(roll)}
-                data-testid={`${testIdPrefix}-roll-${roll.key}`}
-                data-attack={roll.attackAbilityId ? "true" : undefined}
-                className="flex w-full items-center gap-2 rounded border border-border px-2 py-1 text-left text-xs transition-colors hover:bg-muted disabled:opacity-60"
-              >
-                <span className="min-w-0 flex-1 truncate">{roll.label}</span>
-                <span className="text-muted-foreground tabular-nums">
-                  {rolling === roll.key
-                    ? "Rolling…"
-                    : !onAttack && blocked
-                      ? blocked
-                      : roll.formula}
-                </span>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
+    <ul className="grid gap-1" data-testid={`${testIdPrefix}-roll-list`}>
+      {rolls.map((roll) => {
+        const blocked = attackBlocked(roll);
+        return (
+          <li key={roll.key}>
+            <button
+              type="button"
+              disabled={roller.rolling !== null || blocked !== null}
+              aria-busy={roller.rolling === roll.key}
+              title={blocked ?? undefined}
+              onClick={() => handleRoll(roll)}
+              data-testid={`${testIdPrefix}-roll-${roll.key}`}
+              data-attack={roll.attackAbilityId ? "true" : undefined}
+              className={cn(
+                "flex w-full items-center gap-2 border border-border text-left transition-colors hover:bg-muted disabled:opacity-60",
+                touch
+                  ? "min-h-11 touch-manipulation rounded-lg px-3 text-sm active:bg-muted"
+                  : "rounded px-2 py-1 text-xs",
+              )}
+            >
+              <span className="min-w-0 flex-1 truncate">{roll.label}</span>
+              <span className="text-muted-foreground tabular-nums">
+                {roller.rolling === roll.key
+                  ? "Rolling…"
+                  : !onAttack && blocked
+                    ? blocked
+                    : roll.formula}
+              </span>
+            </button>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
 
+/** Who sees the next roll, and what the last one came to. */
+export function RollFeedback({
+  roller,
+  testIdPrefix,
+}: {
+  roller: CharacterRoller;
+  testIdPrefix: string;
+}) {
+  return (
+    <>
       <RollVisibilityPicker
-        isGm={isGm}
-        value={visibility}
-        onChange={setVisibility}
+        isGm={roller.isGm}
+        value={roller.visibility}
+        onChange={roller.setVisibility}
       />
 
-      {rollError ? (
+      {roller.rollError ? (
         <p
           className="text-xs text-destructive"
           data-testid={`${testIdPrefix}-roll-error`}
         >
-          {rollError}
+          {roller.rollError}
         </p>
       ) : null}
 
-      {result ? (
+      {roller.result ? (
         // `RollResult` is the same renderer the dice roller uses, so a roll
         // made from a character reads exactly like one made from the roller —
         // including the Game Master's discrepancy note, which is deliberately
         // never shown to the player rolling (spec 028 FR-067).
-        <div data-testid={`${testIdPrefix}-roll-result`}>
-          <RollResult resolution={result} />
+        <div
+          className="flex flex-wrap items-baseline gap-x-2"
+          data-testid={`${testIdPrefix}-roll-result`}
+        >
+          {roller.resultLabel ? (
+            <span className="text-sm font-medium">{roller.resultLabel}</span>
+          ) : null}
+          <RollResult resolution={roller.result} />
         </div>
       ) : null}
     </>

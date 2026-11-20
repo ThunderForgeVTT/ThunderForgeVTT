@@ -62,11 +62,36 @@ import { cardClass, hintClass, sectionHeadingClass } from "./components/styles";
  * 22rem wide on a monitor of any size. Asked about the viewport, the sheet
  * laid itself out in three columns inside that dock, each a few characters
  * wide. What it has to fit is the box it was given, so that is what it asks.
+ *
+ * Spec 100 US5: a fourth column from `@7xl` (80rem of sheet), and each region
+ * is a container too, so its insides (six ability scores, nine spell slots)
+ * size by the region and not by the whole sheet.
  */
 const SPAN_CLASS: Record<SheetRegion["span"], string> = {
   1: "",
   2: "@md:col-span-2",
   3: "@md:col-span-2 @xl:col-span-3",
+};
+
+/**
+ * Spec 100 FR-012: four columns put the short ability scores in a row with
+ * Character and Combat, the two tallest regions, and left the scores' card
+ * mostly empty. From `@7xl` each row pairs regions of a height instead: those
+ * two take two rows each with Skills under the scores; then Coins, Features
+ * and Notes; then Persona beside Defences and Proficiencies; then the short
+ * Classes and Spellcasting. Every row fills its four columns.
+ */
+const WIDE_CLASS: Partial<Record<string, string>> = {
+  identity: "@7xl:row-span-2",
+  combat: "@7xl:row-span-2",
+  coins: "@7xl:order-1",
+  features: "@7xl:order-1",
+  notes: "@7xl:order-1",
+  persona: "@7xl:order-2",
+  defences: "@7xl:order-2",
+  proficiencies: "@7xl:order-2",
+  classes: "@7xl:order-3",
+  spellcasting: "@7xl:order-3",
 };
 
 /**
@@ -96,7 +121,14 @@ const SPAN_CLASS: Record<SheetRegion["span"], string> = {
  * edit route. Without it every value is text, and no input, checkbox or
  * button is drawn. The server refuses a write from anyone else regardless.
  */
-export default function DnD5eActorSheet({ actor, canEdit }: ActorSheetProps) {
+export default function DnD5eActorSheet({
+  actor,
+  canEdit,
+  onRoll,
+}: ActorSheetProps) {
+  // Spec 102: while the sheet is read, a check, save or skill is a tap to
+  // roll. Never while editing, where the same numbers are inputs.
+  const roll = canEdit ? undefined : onRoll;
   const { data, refetch } = useActorSystemData(actor.id, "dnd5e");
   const [error, setError] = useState<string | null>(null);
   const [isPending, setPending] = useState(false);
@@ -330,6 +362,7 @@ export default function DnD5eActorSheet({ actor, canEdit }: ActorSheetProps) {
             saveProficiencies={saveProficiencies}
             handleScoreChange={handleScoreChange}
             writeProficiencies={writeProficiencies}
+            onRoll={roll}
           />
         );
 
@@ -368,6 +401,7 @@ export default function DnD5eActorSheet({ actor, canEdit }: ActorSheetProps) {
             skillBonus={skillBonus}
             passivePerception={passivePerception}
             writeProficiencies={writeProficiencies}
+            onRoll={roll}
           />
         );
 
@@ -468,7 +502,7 @@ export default function DnD5eActorSheet({ actor, canEdit }: ActorSheetProps) {
   return (
     <div className="@container">
       <div
-        className="grid grid-cols-1 gap-4 @md:grid-cols-2 @xl:grid-cols-3"
+        className="grid grid-cols-1 gap-4 @md:grid-cols-2 @xl:grid-cols-3 @7xl:grid-cols-4"
         data-testid="dnd5e-actor-sheet"
         data-editable={canEdit ? "true" : "false"}
         aria-busy={isPending}
@@ -476,7 +510,7 @@ export default function DnD5eActorSheet({ actor, canEdit }: ActorSheetProps) {
         {error ? (
           <p
             role="alert"
-            className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive @md:col-span-2 @xl:col-span-3"
+            className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive @md:col-span-2 @xl:col-span-3 @7xl:col-span-4"
             data-testid="dnd5e-sheet-error"
           >
             {error}
@@ -486,7 +520,7 @@ export default function DnD5eActorSheet({ actor, canEdit }: ActorSheetProps) {
           <section
             key={region.id}
             aria-labelledby={`dnd5e-region-${region.id}`}
-            className={`${cardClass} grid content-start gap-3 ${SPAN_CLASS[region.span]}`}
+            className={`${cardClass} @container grid content-start gap-3 ${SPAN_CLASS[region.span]} ${WIDE_CLASS[region.id] ?? ""}`}
             data-testid={`dnd5e-region-${region.id}`}
             data-region={region.id}
             data-span={region.span}

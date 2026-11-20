@@ -5,6 +5,7 @@ import { bootTelemetry } from "@thunderforge/telemetry";
 import App from "./App";
 import { FeedbackLauncher } from "./components/feedback/FeedbackLauncher";
 import { AuthProvider } from "./hooks/useAuth";
+import { WorldChromeProvider } from "./hooks/WorldChromeProvider";
 import { ThemeProvider } from "./hooks/useTheme";
 import { registerAssetCache } from "./serviceWorker";
 import { startLogCapture } from "./services/feedbackLogBuffer";
@@ -14,9 +15,10 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <HelmetProvider>
     <ThemeProvider>
       <AuthProvider>
-        <BrowserRouter>
-          <App />
-          {/*
+        <WorldChromeProvider>
+          <BrowserRouter>
+            <App />
+            {/*
             Spec 037 FR-001: the feedback control has to be reachable from
             *any* screen, and this is the only place above every route —
             `/world/:id/play`, `/join/:code` and `/status` are all rendered
@@ -26,8 +28,9 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
 
             This is the first app-root overlay host in this codebase.
           */}
-          <FeedbackLauncher />
-        </BrowserRouter>
+            <FeedbackLauncher />
+          </BrowserRouter>
+        </WorldChromeProvider>
       </AuthProvider>
     </ThemeProvider>
   </HelmetProvider>,

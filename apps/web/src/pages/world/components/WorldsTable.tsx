@@ -123,7 +123,7 @@ function WorldRow({
         </Link>
         <span className="mt-1 block text-xs font-normal">
           <Link
-            to={`/world/${world.id}/staging`}
+            to={`/world/${world.id}`}
             className="text-primary underline-offset-4 hover:underline"
           >
             Enter world

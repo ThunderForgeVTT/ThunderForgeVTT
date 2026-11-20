@@ -80,10 +80,8 @@ test("a connected player observes nothing when the GM preloads another scene", a
   const worldName = `E2E Preload ${uniqueSuffix()}`;
   await gmPage.locator("#world-name").fill(worldName);
   await gmPage.getByRole("button", { name: /create world/i }).click();
-  await gmPage.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 20_000 });
-  const worldId = /\/world\/([^/]+)\/staging$/.exec(
-    new URL(gmPage.url()).pathname,
-  )![1];
+  await gmPage.waitForURL(/\/world\/[^/]+$/, { timeout: 20_000 });
+  const worldId = /\/world\/([^/]+)$/.exec(new URL(gmPage.url()).pathname)![1];
 
   // A second scene to preload. The world's auto-created scene is the one the
   // table will be playing, so preloading it would prove nothing — it is

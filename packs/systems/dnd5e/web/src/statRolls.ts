@@ -70,7 +70,7 @@ function proficiencyBonus(traitData: Json): number {
 }
 
 /** `1d20+4`, `1d20-1`, and a bare `1d20` rather than `1d20+0`. */
-function d20(modifier: number): string {
+export function d20(modifier: number): string {
   if (modifier === 0) return "1d20";
   return modifier > 0 ? `1d20+${modifier}` : `1d20${modifier}`;
 }

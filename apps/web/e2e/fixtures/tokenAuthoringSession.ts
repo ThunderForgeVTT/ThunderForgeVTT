@@ -67,7 +67,7 @@ export async function registerAndCreateWorld(
   await page.getByRole("button", { name: /create world/i }).click();
   // Spec 010: CreateWorldPage now navigates to /world/{id}/staging (not
   // the canvas directly, and not the dashboard).
-  await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
+  await page.waitForURL(/\/world\/[^/]+$/, { timeout: 15_000 });
   await clickPlay(page);
   const match = /\/world\/([^/]+)\/play$/.exec(new URL(page.url()).pathname);
   if (!match) {

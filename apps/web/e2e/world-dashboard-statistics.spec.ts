@@ -86,10 +86,11 @@ test.describe("The world dashboard shows figures, not every scene", () => {
     await expect(page.getByTestId("recent-scenes-all-link")).toHaveText(
       `All ${SCENE_COUNT + 1} scenes`,
     );
-    // The most recently made scene is the first named.
-    await expect(page.getByTestId("recent-scene").first()).toContainText(
-      `Session ${SCENE_COUNT} `,
-    );
+    // The table's scene leads (spec 100 US3.1); after it, the most recently
+    // made scene is the first named.
+    await expect(
+      page.locator("[data-testid=recent-scene]:not([data-active])").first(),
+    ).toContainText(`Session ${SCENE_COUNT} `);
 
     // Same speed at forty scenes as at three: the figures are counted on the
     // server, so the request's cost is a handful of indexed COUNTs whatever

@@ -26,10 +26,8 @@ test("player sees only non-hidden scenes, can preview one, and it disappears aga
   const worldName = `E2E Scene Player Browsing ${uniqueSuffix()}`;
   await gmPage.locator("#world-name").fill(worldName);
   await gmPage.getByRole("button", { name: /create world/i }).click();
-  await gmPage.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
-  const worldId = /\/world\/([^/]+)\/staging$/.exec(
-    new URL(gmPage.url()).pathname,
-  )?.[1];
+  await gmPage.waitForURL(/\/world\/[^/]+$/, { timeout: 15_000 });
+  const worldId = /\/world\/([^/]+)$/.exec(new URL(gmPage.url()).pathname)?.[1];
   if (!worldId) throw new Error("Could not extract world id");
 
   const playerPage = await inviteAndJoinAsPlayer(browser, gmPage, worldId);

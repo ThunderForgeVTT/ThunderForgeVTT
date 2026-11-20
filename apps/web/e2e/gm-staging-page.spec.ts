@@ -1,5 +1,9 @@
 import { test, expect, type Page } from "./fixtures/test";
-import { STARTER_SCENE_NAME, openDockTab } from "./fixtures/helpers";
+import {
+  STARTER_SCENE_NAME,
+  openDockTab,
+  seatPlayer,
+} from "./fixtures/helpers";
 
 /**
  * specs/009-gm-staging-page: the GM staging page and full-screen play
@@ -63,8 +67,8 @@ async function registerAndCreateWorld(
   await page.waitForURL(/\/worlds\/create$/, { timeout: 15_000 });
   await page.locator("#world-name").fill(worldName);
   await page.getByRole("button", { name: /create world/i }).click();
-  await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
-  const match = /\/world\/([^/]+)\/staging$/.exec(new URL(page.url()).pathname);
+  await page.waitForURL(/\/world\/[^/]+$/, { timeout: 15_000 });
+  const match = /\/world\/([^/]+)$/.exec(new URL(page.url()).pathname);
   if (!match) {
     throw new Error(`Could not extract world id from URL: ${page.url()}`);
   }
@@ -105,12 +109,12 @@ test.describe("US1: GM sees a real staging page, not the old placeholder shell",
     // The starter scene, by its own name — it is no longer named after the
     // world (spec 026 FR-009f; see STARTER_SCENE_NAME).
     await expect(
-      page.getByRole("link", { name: STARTER_SCENE_NAME }),
+      page.getByRole("link", { name: STARTER_SCENE_NAME, exact: true }),
     ).toBeVisible({
       timeout: 10_000,
     });
     await page.goBack();
-    await page.waitForURL(`**/world/${worldId}/staging`, { timeout: 10_000 });
+    await page.waitForURL(`**/world/${worldId}`, { timeout: 10_000 });
 
     await expect(page.getByTestId("world-nav-players")).toBeVisible();
     await expect(page.getByTestId("world-nav-npcs")).toBeVisible();
@@ -151,7 +155,7 @@ test.describe("US1: back-to-staging navigates to the dedicated staging route", (
     // open (see WorldDock/SettingsPanel).
     await openDockTab(page, "settings");
     await page.getByTestId("back-to-staging-button").click();
-    await page.waitForURL(new RegExp(`/world/${worldId}/staging$`), {
+    await page.waitForURL(new RegExp(`/world/${worldId}$`), {
       timeout: 15_000,
     });
     await expect(page.getByTestId("world-staging-page")).toBeVisible();
@@ -222,7 +226,7 @@ test.describe("US3: players get the same shell, read-only and independent of the
         .locator("#world-name")
         .fill(`E2E Player Own ${uniqueSuffix()}`);
       await playerPage.getByRole("button", { name: /create world/i }).click();
-      await playerPage.waitForURL(/\/world\/[^/]+\/staging$/, {
+      await playerPage.waitForURL(/\/world\/[^/]+$/, {
         timeout: 15_000,
       });
 
@@ -236,7 +240,8 @@ test.describe("US3: players get the same shell, read-only and independent of the
         { timeout: 15_000 },
       );
 
-      await playerPage.goto(`/world/${worldId}/staging`);
+      await seatPlayer(page, playerPage, worldId);
+      await playerPage.goto(`/world/${worldId}`);
       await expect(playerPage.getByTestId("world-staging-page")).toBeVisible({
         timeout: 15_000,
       });
@@ -248,13 +253,13 @@ test.describe("US3: players get the same shell, read-only and independent of the
       await expect(playerPage.getByTestId("new-scene-name-input")).toHaveCount(
         0,
       );
-      await playerPage.goto(`/world/${worldId}/staging`);
+      await playerPage.goto(`/world/${worldId}`);
 
       // The player enters full-screen independently — the GM's own,
       // separate browser session is unaffected by the player's navigation.
       await playerPage.getByTestId("play-button").click();
       await waitForEngineReady(playerPage);
-      await page.goto(`/world/${worldId}/staging`);
+      await page.goto(`/world/${worldId}`);
       await expect(page.getByTestId("world-staging-page")).toBeVisible({
         timeout: 15_000,
       });
@@ -276,13 +281,15 @@ test.describe("US3: players get the same shell, read-only and independent of the
       await register(outsiderPage, freshCredentials("e2estageoutsider"));
       await outsiderPage.waitForURL(/\/worlds\/create$/, { timeout: 15_000 });
 
-      await outsiderPage.goto(`/world/${worldId}/staging`);
-      // The staging shell itself still renders, but never with the real
-      // world's data — `getWorld` enforces the same visibility rule as
-      // `scenes`, so a non-member never sees the real world name.
-      await expect(outsiderPage.getByTestId("world-staging-page")).toBeVisible({
-        timeout: 15_000,
-      });
+      await outsiderPage.goto(`/world/${worldId}`);
+      // The overview says the world could not be opened, and never shows
+      // the real world's data — `getWorld` enforces the same visibility rule
+      // as `scenes`, so a non-member never sees the real world name.
+      await expect(
+        outsiderPage.getByRole("heading", {
+          name: "This world could not be opened.",
+        }),
+      ).toBeVisible({ timeout: 15_000 });
       await expect(outsiderPage.getByText(worldName)).toHaveCount(0);
     } finally {
       await outsiderContext.close();

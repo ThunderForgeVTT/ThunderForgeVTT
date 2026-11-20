@@ -111,7 +111,7 @@ test.describe("spec 051 capstone journey: the whole story", () => {
 
     try {
       await test.step("1. the table plays two scenes", async () => {
-        await gmTab.goto(`/world/${table.worldId}/staging`);
+        await gmTab.goto(`/world/${table.worldId}`);
         await gmTab.getByTestId("world-nav-scenes").click();
         await gmTab.waitForURL(new RegExp(`/world/${table.worldId}/scenes$`), {
           timeout: 15_000,

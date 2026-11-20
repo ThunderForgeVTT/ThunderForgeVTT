@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "./fixtures/test";
+import { seatPlayer } from "./fixtures/helpers";
 
 /**
  * `032/T108`: a pack declares the panels it contributes.
@@ -65,8 +66,8 @@ async function createWorld(page: Page, worldName: string): Promise<string> {
   await page.goto("/worlds/create");
   await page.locator("#world-name").fill(worldName);
   await page.getByRole("button", { name: /create world/i }).click();
-  await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
-  const match = /\/world\/([^/]+)\/staging$/.exec(new URL(page.url()).pathname);
+  await page.waitForURL(/\/world\/[^/]+$/, { timeout: 15_000 });
+  const match = /\/world\/([^/]+)$/.exec(new URL(page.url()).pathname);
   if (!match)
     throw new Error(`Could not extract world id from URL: ${page.url()}`);
   return match[1];
@@ -148,7 +149,8 @@ test.describe("Spec 032 T108: a pack's panels reach the pages that host them", (
 
     // A Player reads the system on the Overview, where "About this table"
     // mounts the same `world-settings` slot with `isGm` false.
-    await playerPage.goto(`/world/${worldId}/staging`);
+    await seatPlayer(gmPage, playerPage, worldId);
+    await playerPage.goto(`/world/${worldId}`);
     await expect(
       playerPage
         .getByTestId("about-this-table")
@@ -208,7 +210,7 @@ test.describe("Spec 032 T108: a pack's panels reach the pages that host them", (
 
     // Nor `world-staging`. The staging page still renders everything of its
     // own; it simply ends after the invite link.
-    await page.goto(`/world/${worldId}/staging`);
+    await page.goto(`/world/${worldId}`);
     await expect(page.getByTestId("world-staging-page")).toBeVisible({
       timeout: 15_000,
     });

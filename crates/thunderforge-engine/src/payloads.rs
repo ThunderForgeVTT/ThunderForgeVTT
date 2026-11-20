@@ -603,6 +603,16 @@ pub(crate) enum ExternalCommand {
     SetRendering {
         on: bool,
     },
+    /// A line or a roll said as a token (spec 103); see `plugins/speech.rs`.
+    Say {
+        say: crate::plugins::speech::Say,
+    },
+    /// Every bubble down at once: the chat is open and being read.
+    ClearSpeech,
+    /// The CSS px of the canvas that page chrome covers.
+    SetViewInsets {
+        insets: crate::plugins::speech::ViewInsets,
+    },
 }
 
 /// A `WorldRoll` as the web fetched it, in its GraphQL field names.

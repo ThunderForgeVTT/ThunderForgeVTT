@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   GraphQLRequestError,
+  isQuery,
   operationNameOf,
   postGraphQL,
   postGraphQLMultipart,
@@ -204,6 +205,11 @@ describe("postGraphQL — GraphQL errors", () => {
 });
 
 describe("postGraphQL — transport failures", () => {
+  beforeEach(() => {
+    // Full jitter at zero: a retry waits no time.
+    vi.spyOn(Math, "random").mockReturnValue(0);
+  });
+
   it("turns a rejected fetch into a readable message", async () => {
     fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
     const err = (await postGraphQL(QUERY).catch(
@@ -212,6 +218,37 @@ describe("postGraphQL — transport failures", () => {
     expect(err).toBeInstanceOf(GraphQLRequestError);
     expect(err.message).toMatch(/could not reach the server/i);
     expect(err.operation).toBe("WorldAbilities");
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("sends a query again when the connection dropped", async () => {
+    fetchMock
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockResolvedValueOnce(jsonResponse({ data: { ok: true } }));
+    await expect(postGraphQL(QUERY)).resolves.toEqual({ ok: true });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("never sends a mutation twice", async () => {
+    fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
+    await expect(postGraphQL("mutation Save { save { id } }")).rejects.toThrow(
+      /could not reach the server/i,
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not send a query again after it timed out", async () => {
+    fetchMock.mockImplementation((_url: string, init: RequestInit) => {
+      return new Promise((_resolve, reject) => {
+        init.signal?.addEventListener("abort", () => {
+          reject(new DOMException("Aborted", "AbortError"));
+        });
+      });
+    });
+    await expect(
+      postGraphQL(QUERY, undefined, { timeoutMs: 10 }),
+    ).rejects.toThrow(/timed out/i);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("times out rather than hanging forever", async () => {
@@ -626,5 +663,14 @@ describe("postGraphQLTolerating", () => {
     await expect(
       postGraphQLTolerating(CREATE, { input: {} }, ["STARTING_MAP_FAILED"]),
     ).rejects.toBeInstanceOf(GraphQLRequestError);
+  });
+});
+
+describe("isQuery", () => {
+  it("reads named and anonymous queries, not mutations or subscriptions", () => {
+    expect(isQuery("query A { a }")).toBe(true);
+    expect(isQuery("\n  { a }")).toBe(true);
+    expect(isQuery("mutation A { a }")).toBe(false);
+    expect(isQuery("subscription A { a }")).toBe(false);
   });
 });

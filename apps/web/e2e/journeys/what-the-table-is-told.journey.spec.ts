@@ -68,8 +68,8 @@ async function expectToldThatAndWhen(
   });
 
   await test.step(`the ${role}'s world pages carry a quiet banner`, async () => {
-    for (const path of ["staging", "players", "settings/system"]) {
-      await page.goto(`/world/${worldId}/${path}`);
+    for (const path of ["", "/players", "/settings/system"]) {
+      await page.goto(`/world/${worldId}${path}`);
       const banner = page.getByTestId("world-play-paused-banner");
       await expect(banner).toContainText(
         /Play in this world has been paused by an operator since \S/,
@@ -78,7 +78,7 @@ async function expectToldThatAndWhen(
       await expect(banner).toHaveAttribute("role", "status");
       // Still on the page asked for: a member is not sent to the notice for
       // looking at their world (FR-024).
-      await expect(page).toHaveURL(new RegExp(`/world/${worldId}/${path}$`));
+      await expect(page).toHaveURL(new RegExp(`/world/${worldId}${path}$`));
       await expectNothingSecret(page, secrets);
     }
   });
@@ -135,6 +135,17 @@ test.describe("spec 051 US5 journey: what the table is told", () => {
           new RegExp(`/world/${table.worldId}/actor-select$`),
           { timeout: 20_000 },
         );
+        // A seat at the table: a member with no character is sent back here
+        // from the world's overview (spec 017 FR-001).
+        await trustedPage
+          .locator("#new-character-name")
+          .fill(`Trusted ${uniqueSuffix()}`);
+        await trustedPage
+          .getByRole("button", { name: /create and play as this character/i })
+          .click();
+        await trustedPage.waitForURL(new RegExp(`/world/${table.worldId}$`), {
+          timeout: 20_000,
+        });
       });
 
       await test.step("the Game Master makes them a Trusted Player on the Players page", async () => {
@@ -142,7 +153,13 @@ test.describe("spec 051 US5 journey: what the table is told", () => {
         const card = table.gmPage
           .getByTestId("players-list")
           .locator('[data-testid^="player-card-"]')
-          .filter({ hasText: trusted.username });
+          // Named by their own heading: their character is listed on the
+          // Game Master's card too, with whose it is.
+          .filter({
+            has: table.gmPage.locator('[data-testid^="player-name-"]', {
+              hasText: trusted.username,
+            }),
+          });
         await expect(card).toHaveCount(1, { timeout: 15_000 });
         const select = card.locator(
           'select[data-testid^="player-role-select-"]',
@@ -235,8 +252,8 @@ test.describe("spec 051 US5 journey: what the table is told", () => {
 
       for (const { role, page } of seats) {
         await test.step(`the ${role}'s world shows the history, times only`, async () => {
-          const path = role === "Game Master" ? "settings/system" : "staging";
-          await page.goto(`/world/${table.worldId}/${path}`);
+          const path = role === "Game Master" ? "/settings/system" : "";
+          await page.goto(`/world/${table.worldId}${path}`);
           const history = page.getByTestId("play-pause-history-card");
           await expect(history).toBeVisible({ timeout: 20_000 });
           const rows = history.getByTestId("play-pause-history-row");

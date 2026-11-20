@@ -32,7 +32,7 @@ test.describe("Spec 018 Scenario 9: a Genie session reaches a definitive win or 
       "e2eloss",
     );
 
-    await page.goto(`/world/${worldId}/staging`);
+    await page.goto(`/world/${worldId}`);
     const clocks = page.getByTestId("session-clocks");
     await expect(clocks).toBeVisible({ timeout: 15_000 });
     await expect(clocks).toContainText("0 / 6");
@@ -60,7 +60,7 @@ test.describe("Spec 018 Scenario 9: a Genie session reaches a definitive win or 
       "e2ewin",
     );
 
-    await page.goto(`/world/${worldId}/staging`);
+    await page.goto(`/world/${worldId}`);
     const clocks = page.getByTestId("session-clocks");
     await expect(clocks).toBeVisible({ timeout: 15_000 });
 

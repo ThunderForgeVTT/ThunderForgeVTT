@@ -219,10 +219,10 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
               This actor doesn't exist or you don't have access to it.
             </p>
             <Link
-              to={`/world/${worldId}/staging`}
+              to={`/world/${worldId}`}
               className="text-primary hover:underline"
             >
-              Back to staging
+              Back to the world
             </Link>
           </Card>
         </main>
@@ -438,11 +438,12 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
         noindex
       />
       {/* Spec 088 US3 (contracts/layouts.md): the page's own wrapper, as wide
-          as the world's other pages, and three columns where there is room.
-          Column A is who the character is, B the sheet, C the rolls and the
-          Game Master's switches; between 1024 and 1535 px, C sits under A. */}
+          as the world's other pages. Spec 100 US5: from `lg`, column A is a
+          rail (who the character is) and the sheet takes the rest, with C
+          (the rolls and the Game Master's switches) under it. Column B is a
+          container, so the system sheet lays out by its own width. */}
       <div
-        className="mx-auto grid w-full max-w-[1800px] gap-6 px-4 py-6 sm:px-6 lg:py-10"
+        className="mx-auto grid w-full max-w-(--page-max) gap-6 px-4 py-6 sm:px-6 lg:px-8 lg:py-10"
         data-testid="actor-view"
       >
         <Button
@@ -452,9 +453,7 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
           className="justify-self-start"
           onClick={() =>
             navigate(
-              fromPlayers
-                ? `/world/${worldId}/players`
-                : `/world/${worldId}/staging`,
+              fromPlayers ? `/world/${worldId}/players` : `/world/${worldId}`,
             )
           }
           data-testid="actor-back"
@@ -524,11 +523,11 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
         ) : null}
 
         <div
-          className="grid items-start gap-6 lg:grid-cols-2 2xl:grid-cols-3"
+          className="grid items-start gap-6 lg:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)]"
           data-testid="actor-view-grid"
         >
           <div
-            className="grid min-w-0 content-start gap-6"
+            className="grid min-w-0 content-start gap-6 lg:row-span-2"
             data-testid="actor-view-column-a"
           >
             {/*
@@ -660,7 +659,7 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
           </div>
 
           <div
-            className="grid min-w-0 content-start gap-6 lg:row-span-2"
+            className="@container grid min-w-0 content-start gap-6"
             data-testid="actor-view-column-b"
           >
             {(() => {
@@ -777,7 +776,7 @@ export default function ActorDetailPage({ mode }: ActorDetailPageProps) {
           </div>
 
           <div
-            className="grid min-w-0 content-start gap-6"
+            className="grid min-w-0 content-start gap-6 lg:col-start-2"
             data-testid="actor-view-column-c"
           >
             {/* Spec 081 US2: the character's rolls, for whoever may play them.

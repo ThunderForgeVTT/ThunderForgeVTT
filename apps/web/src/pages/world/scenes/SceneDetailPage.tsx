@@ -22,13 +22,16 @@ import {
 import { preloadScene } from "@/services/scenePreload";
 import { FullMapCredit } from "@/components/world/MapCredit";
 import type { SceneRecord } from "@/types/scene";
+import { retryImport } from "@/components/ui/lazy-boundary/retryImport";
 
 // Spec 068 FR-002: the summary editor is CodeMirror, and most visits to a
 // scene's page are to read it or to launch it.
-const SceneSummaryEditor = lazy(() =>
-  import("@/pages/world/scenes/SceneSummaryEditor").then((module) => ({
-    default: module.SceneSummaryEditor,
-  })),
+const SceneSummaryEditor = lazy(
+  retryImport(() =>
+    import("@/pages/world/scenes/SceneSummaryEditor").then((module) => ({
+      default: module.SceneSummaryEditor,
+    })),
+  ),
 );
 
 export interface SceneDetailPageProps {

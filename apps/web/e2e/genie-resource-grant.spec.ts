@@ -112,7 +112,7 @@ test.describe("Spec 020 User Story 1: GM grants Session Resources and items", ()
     });
 
     // GM starts the session from the staging page.
-    await gmPage.goto(`/world/${worldId}/staging`);
+    await gmPage.goto(`/world/${worldId}`);
     await expect(gmPage.getByTestId("genie-session-panel-wrapper")).toBeVisible(
       { timeout: 15_000 },
     );
@@ -127,7 +127,7 @@ test.describe("Spec 020 User Story 1: GM grants Session Resources and items", ()
     // Player is already watching the staging page (open BEFORE the grant)
     // so the assertion below genuinely exercises live cross-client sync
     // (FR-007's "resource_grant" world_events kind), not a fetch-on-mount.
-    await playerPage.goto(`/world/${worldId}/staging`);
+    await playerPage.goto(`/world/${worldId}`);
     await expect(playerPage.getByTestId("genie-session-panel")).toBeVisible({
       timeout: 15_000,
     });

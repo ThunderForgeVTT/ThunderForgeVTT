@@ -106,9 +106,9 @@ async function registerAndCreateWorldOnDashboard(
   await page.goto("/worlds/create");
   await page.locator("#world-name").fill(worldName);
   await page.getByRole("button", { name: /create world/i }).click();
-  await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
+  await page.waitForURL(/\/world\/[^/]+$/, { timeout: 15_000 });
 
-  const match = /\/world\/([^/]+)\/staging$/.exec(new URL(page.url()).pathname);
+  const match = /\/world\/([^/]+)$/.exec(new URL(page.url()).pathname);
   if (!match) {
     throw new Error(`Could not extract world id from URL: ${page.url()}`);
   }
@@ -120,7 +120,7 @@ async function registerAndCreateWorldOnDashboard(
  * (rather than folded into `registerAndCreateWorldOnDashboard`) so this
  * file's existing call sites don't need a mechanical rename. */
 async function enterWorldPlay(page: Page): Promise<void> {
-  await expect(page).toHaveURL(/\/world\/[^/]+\/staging$/);
+  await expect(page).toHaveURL(/\/world\/[^/]+$/);
   await page.getByTestId("play-button").click();
   await page.waitForURL(/\/world\/[^/]+\/play$/, { timeout: 15_000 });
 }
@@ -224,7 +224,7 @@ async function waitForEngineReady(page: Page, tool?: GmToolId): Promise<void> {
   // stand in for this, but it raced the canvas's own mount and could
   // misfire a click on a "play-button" that doesn't exist on /play,
   // hanging for the full timeout).
-  if (/\/staging$/.test(new URL(page.url()).pathname)) {
+  if (/\/world\/[^/]+$/.test(new URL(page.url()).pathname)) {
     await page.getByTestId("play-button").click({ timeout: 15_000 });
   }
   await expect(canvas).toBeVisible({ timeout: 15_000 });

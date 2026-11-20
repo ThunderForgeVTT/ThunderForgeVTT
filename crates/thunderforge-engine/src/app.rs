@@ -160,6 +160,8 @@ pub(crate) struct TableTime<'w> {
     reduced_motion: Option<ResMut<'w, crate::systems::token_glide::ReducedMotion>>,
     // Exists once `DarknessPlugin` is registered.
     time_of_day: Option<ResMut<'w, plugins::time_of_day::TimeOfDay>>,
+    // Spec 103: exists once `SpeechPlugin` is registered.
+    speech: Option<ResMut<'w, plugins::speech::Speech>>,
 }
 
 /// The interaction plugin's resources, grouped.
@@ -973,6 +975,23 @@ pub(crate) fn apply_external_commands(
                 if let Some(rendering) = scene.rendering.as_mut() {
                     // `set_if_neq`, so a repeat leaves the change tick alone.
                     rendering.set_if_neq(plugins::render_pause::Rendering { on });
+                }
+            }
+            ExternalCommand::Say { say } => {
+                if let Some(speech) = scene.table_time.speech.as_mut() {
+                    speech.says.push(say);
+                }
+            }
+            ExternalCommand::ClearSpeech => {
+                if let Some(speech) = scene.table_time.speech.as_mut() {
+                    speech.clear = true;
+                    // A line queued this frame would be cleared with the rest.
+                    speech.says.clear();
+                }
+            }
+            ExternalCommand::SetViewInsets { insets } => {
+                if let Some(speech) = scene.table_time.speech.as_mut() {
+                    speech.insets = insets;
                 }
             }
         }

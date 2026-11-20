@@ -102,13 +102,13 @@ test("a Player is shown no administration and the server refuses it", async ({
     `claim refused: ${JSON.stringify(claim.errors ?? claim)}`,
   ).toBe(actorId);
 
-  await test.step("the Game Master's dashboard carries the controls", async () => {
+  await test.step("the Game Master's overview carries the controls", async () => {
     await page.goto(`/world/${worldId}`);
     await expect(page.getByTestId("world-manage-settings")).toBeVisible({
       timeout: 15_000,
     });
     await expect(page.getByTestId("world-delete")).toBeVisible();
-    // Spec 088: links are made on the players page; the dashboard points there.
+    // Spec 088: links are made on the players page; the overview points there.
     await expect(
       page.getByTestId("campaign-settings-players-link"),
     ).toBeVisible();
@@ -118,17 +118,16 @@ test("a Player is shown no administration and the server refuses it", async ({
     ).toBeVisible({ timeout: 15_000 });
   });
 
-  await test.step("the Player's dashboard carries none of them", async () => {
+  await test.step("the Player's overview carries none of them", async () => {
     await player.goto(`/world/${worldId}`);
     await expect(player).toHaveURL(new RegExp(`/world/${worldId}$`));
-    await expect(player.getByText("World dashboard")).toBeVisible({
+    await expect(player.getByTestId("world-staging-page")).toBeVisible({
       timeout: 15_000,
     });
     // The game system is still shown, as a fact rather than a way in.
     await expect(player.getByText("Game system")).toBeVisible();
     await expect(player.getByTestId("world-manage-settings")).toHaveCount(0);
     await expect(player.getByTestId("world-delete")).toHaveCount(0);
-    await expect(player.getByTestId("world-delete-permanently")).toHaveCount(0);
     await expect(player.getByText(/delete/i)).toHaveCount(0);
     await expect(player.getByTestId("world-system-settings-link")).toHaveCount(
       0,
@@ -145,7 +144,7 @@ test("a Player is shown no administration and the server refuses it", async ({
   });
 
   await test.step("the Player's world nav has no settings entry", async () => {
-    await player.goto(`/world/${worldId}/staging`);
+    await player.goto(`/world/${worldId}`);
     await expect(player.getByTestId("world-nav-overview")).toBeVisible({
       timeout: 15_000,
     });

@@ -56,6 +56,17 @@ test.describe("before the click", () => {
     expectClean(opened);
   });
 
+  test("every way into the demo opens its world's play field", async ({ page }) => {
+    // Spec 100 US1: no dashboard or staging between the landing and the board.
+    const opened = await openLanding(page);
+    const links = page.locator('a[href*="/demo/"]');
+    expect(await links.count()).toBeGreaterThan(0);
+    for (const href of await links.evaluateAll((as) => as.map((a) => a.getAttribute("href")))) {
+      expect(href).toMatch(/\/demo\/world\/[^/]+\/play$/);
+    }
+    expectClean(opened);
+  });
+
   test("a device under 4 GB is held back too", async ({ page }) => {
     await page.addInitScript(() => Object.defineProperty(navigator, "deviceMemory", { get: () => 2 }));
     await openLanding(page);

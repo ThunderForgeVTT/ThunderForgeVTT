@@ -1,14 +1,11 @@
-import { useEffect, useState } from "react";
-import { useResetOnChange } from "@/hooks/useResetOnChange";
 import { useParams } from "react-router-dom";
-import { getWorld } from "@/api/world";
 import { SEO } from "@/components/seo/SEO";
 import { Loader } from "@/components/ui/loader/Loader";
+import { useKnownWorld } from "@/hooks/world-chrome-context";
 import { useWorldRole } from "@/hooks/useWorldRole";
 import { WorldSectionShell } from "@/layouts/world-layout/WorldSectionShell";
 import { ScenesPage } from "@/pages/world/scenes/ScenesPage";
 import type { SeoConfig } from "@/types/seo";
-import type { WorldRecord } from "@/types/world";
 
 /**
  * Spec 022: `/world/:id/scenes` — the Scenes section's list view, a
@@ -18,36 +15,10 @@ import type { WorldRecord } from "@/types/world";
  */
 export default function ScenesRoutePage() {
   const { id = "" } = useParams();
-  const [world, setWorld] = useState<WorldRecord | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  // Spec 101 FR-001: the world as last known, so moving between its pages
+  // keeps the page on screen; only a first visit waits.
+  const { world, known } = useKnownWorld(id);
   const { isGm } = useWorldRole(id, world);
-
-  // Reset during render rather than at the top of the effect below: this
-  // is state derived from the arguments, and doing it in the effect commits
-  // one render pairing the new key with the previous key's data.
-  useResetOnChange(id, () => {
-    setIsLoading(true);
-  });
-
-  useEffect(() => {
-    let active = true;
-
-    getWorld(id)
-      .then((result) => {
-        if (active) {
-          setWorld(result);
-        }
-      })
-      .finally(() => {
-        if (active) {
-          setIsLoading(false);
-        }
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [id]);
 
   const seo: SeoConfig = {
     title: world ? `${world.name} — Scenes` : "World scenes",
@@ -56,7 +27,7 @@ export default function ScenesRoutePage() {
     noindex: true,
   };
 
-  if (isLoading) {
+  if (!known) {
     return <Loader fullScreen label="Loading scenes" />;
   }
 

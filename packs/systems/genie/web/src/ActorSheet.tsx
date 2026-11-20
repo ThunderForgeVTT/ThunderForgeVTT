@@ -35,14 +35,16 @@ const DEFAULT_GENIE_ABILITIES: GenieAbilityData = {
 /**
  * Columns a region takes, by the span it declares.
  *
- * One column below `md` whatever a region asks for, so a 375px phone reads the
- * sheet top to bottom in the declared order. Two columns at `md`, three at
- * `lg`. Full literal strings: Tailwind only builds classes it finds verbatim.
+ * One column below `@md` whatever a region asks for, so a 375px phone and the
+ * play dock read the sheet top to bottom in the declared order. Two columns at
+ * `@md`, three at `@3xl`. Container queries (spec 100 US5): the sheet asks the
+ * box it was given, not the screen. Full literal strings: Tailwind only builds
+ * classes it finds verbatim.
  */
 const SPAN_CLASS: Record<GenieSheetRegion["span"], string> = {
   1: "",
-  2: "md:col-span-2",
-  3: "md:col-span-2 lg:col-span-3",
+  2: "@md:col-span-2",
+  3: "@md:col-span-2 @3xl:col-span-3",
 };
 
 /**
@@ -239,7 +241,7 @@ export default function GenieActorSheet({ actor, canEdit }: ActorSheetProps) {
 
       case "pools":
         return (
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 @md:grid-cols-2">
             {GENIE_RESOURCES.map((pool) => {
               const current = resourceData[pool.current];
               const max = resourceData[pool.max];
@@ -402,31 +404,33 @@ export default function GenieActorSheet({ actor, canEdit }: ActorSheetProps) {
   };
 
   return (
-    <div
-      className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3"
-      data-testid="genie-actor-sheet"
-      data-editable={canEdit ? "true" : "false"}
-    >
-      {GENIE_SHEET_REGIONS.map((region) => (
-        <section
-          key={region.id}
-          aria-labelledby={`genie-region-${region.id}`}
-          className={`${cardClass} grid content-start gap-3 ${SPAN_CLASS[region.span]}`}
-          data-testid={
-            region.kind === "pools" ? "genie-resources-tab" : `genie-region-${region.id}`
-          }
-          data-region={region.id}
-          data-span={region.span}
-        >
-          <header className="grid gap-0.5">
-            <h2 id={`genie-region-${region.id}`} className={sectionHeadingClass}>
-              {region.title}
-            </h2>
-            <p className={hintClass}>{region.blurb}</p>
-          </header>
-          {regionBody(region)}
-        </section>
-      ))}
+    <div className="@container">
+      <div
+        className="grid grid-cols-1 gap-4 @md:grid-cols-2 @3xl:grid-cols-3"
+        data-testid="genie-actor-sheet"
+        data-editable={canEdit ? "true" : "false"}
+      >
+        {GENIE_SHEET_REGIONS.map((region) => (
+          <section
+            key={region.id}
+            aria-labelledby={`genie-region-${region.id}`}
+            className={`${cardClass} @container grid content-start gap-3 ${SPAN_CLASS[region.span]}`}
+            data-testid={
+              region.kind === "pools" ? "genie-resources-tab" : `genie-region-${region.id}`
+            }
+            data-region={region.id}
+            data-span={region.span}
+          >
+            <header className="grid gap-0.5">
+              <h2 id={`genie-region-${region.id}`} className={sectionHeadingClass}>
+                {region.title}
+              </h2>
+              <p className={hintClass}>{region.blurb}</p>
+            </header>
+            {regionBody(region)}
+          </section>
+        ))}
+      </div>
     </div>
   );
 }

@@ -63,8 +63,8 @@ async function registerAndCreateWorld(
   await page.waitForURL(/\/worlds\/create$/, { timeout: 15_000 });
   await page.locator("#world-name").fill(worldName);
   await page.getByRole("button", { name: /create world/i }).click();
-  await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
-  const match = /\/world\/([^/]+)\/staging$/.exec(new URL(page.url()).pathname);
+  await page.waitForURL(/\/world\/[^/]+$/, { timeout: 15_000 });
+  const match = /\/world\/([^/]+)$/.exec(new URL(page.url()).pathname);
   if (!match) {
     throw new Error(`Could not extract world id from URL: ${page.url()}`);
   }
@@ -137,7 +137,7 @@ test.describe("US3: DM assigns ownership; grantee gains edit rights", () => {
         .locator("#world-name")
         .fill(`E2E Player Own ${uniqueSuffix()}`);
       await playerPage.getByRole("button", { name: /create world/i }).click();
-      await playerPage.waitForURL(/\/world\/[^/]+\/staging$/, {
+      await playerPage.waitForURL(/\/world\/[^/]+$/, {
         timeout: 15_000,
       });
       const playerId = await currentUserId(playerPage);
@@ -149,7 +149,7 @@ test.describe("US3: DM assigns ownership; grantee gains edit rights", () => {
         { timeout: 15_000 },
       );
 
-      await page.goto(`/world/${worldId}/staging`);
+      await page.goto(`/world/${worldId}`);
       const actorId = await createNpcAndOpenEdit(
         page,
         worldId,
@@ -229,7 +229,7 @@ test.describe("US3: DM assigns ownership; grantee gains edit rights", () => {
           .locator("#world-name")
           .fill(`E2E Multi Own ${index} ${uniqueSuffix()}`);
         await playerPage.getByRole("button", { name: /create world/i }).click();
-        await playerPage.waitForURL(/\/world\/[^/]+\/staging$/, {
+        await playerPage.waitForURL(/\/world\/[^/]+$/, {
           timeout: 15_000,
         });
         playerIds.push(await currentUserId(playerPage));
@@ -242,7 +242,7 @@ test.describe("US3: DM assigns ownership; grantee gains edit rights", () => {
         );
       }
 
-      await page.goto(`/world/${worldId}/staging`);
+      await page.goto(`/world/${worldId}`);
       await createNpcAndOpenEdit(page, worldId, `Shared NPC ${uniqueSuffix()}`);
 
       await expect(page.getByTestId("actor-ownership-block")).toBeVisible({

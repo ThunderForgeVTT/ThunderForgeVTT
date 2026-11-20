@@ -173,12 +173,9 @@ test.describe("spec 051 US2 journey: every way back in ends on the notice", () =
       await test.step("before the pause: the Game Master's first tab steps out to setup", async () => {
         await ensureSidebarOpen(table.gmPage);
         await table.gmPage.getByTestId("back-to-staging-button").click();
-        await table.gmPage.waitForURL(
-          new RegExp(`/world/${worldId}/staging$`),
-          {
-            timeout: 15_000,
-          },
-        );
+        await table.gmPage.waitForURL(new RegExp(`/world/${worldId}$`), {
+          timeout: 15_000,
+        });
       });
 
       await test.step("the operator pauses the world through the portal", async () => {
@@ -215,7 +212,7 @@ test.describe("spec 051 US2 journey: every way back in ends on the notice", () =
           description: new URL(gm.url()).pathname,
         });
         await gm.goBack();
-        await expect(gm).not.toHaveURL(/\/staging$/);
+        await expect(gm).not.toHaveURL(new RegExp(`/world/${worldId}$`));
         await expectOnlyTheNotice(gm, worldId, worldName);
       });
 
@@ -275,13 +272,13 @@ test.describe("spec 051 US2 journey: every way back in ends on the notice", () =
         // world link is the one that points at this world.
         const enter = gm
           .getByRole("link", { name: "Enter world" })
-          .and(gm.locator(`a[href="/world/${worldId}/staging"]`));
+          .and(gm.locator(`a[href="/world/${worldId}"]`));
         await expect(enter).toBeVisible({ timeout: 20_000 });
         await expect(
           gm.getByRole("heading", { name: worldName, level: 2 }),
         ).toBeVisible();
         await enter.click();
-        await gm.waitForURL(new RegExp(`/world/${worldId}/(staging|paused)$`), {
+        await gm.waitForURL(new RegExp(`/world/${worldId}(/paused)?$`), {
           timeout: 15_000,
         });
         // Setup can hear of the pause on its own and move to the notice
@@ -329,8 +326,8 @@ test.describe("spec 051 US2 journey: every way back in ends on the notice", () =
         await gm.goto("/worlds/create");
         await gm.locator("#world-name").fill(otherName);
         await gm.getByRole("button", { name: /create world/i }).click();
-        await gm.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
-        const otherId = /\/world\/([^/]+)\/staging$/.exec(
+        await gm.waitForURL(/\/world\/[^/]+$/, { timeout: 15_000 });
+        const otherId = /\/world\/([^/]+)$/.exec(
           new URL(gm.url()).pathname,
         )![1];
         await enterPlayFromTheWorld(gm, otherId);

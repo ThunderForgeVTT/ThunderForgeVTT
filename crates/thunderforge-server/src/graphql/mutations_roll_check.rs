@@ -344,6 +344,7 @@ pub async fn roll_check_impl<R: rand::Rng>(
             // Spec 081: a check is rolled for the table, by its name.
             visibility: None,
             label: Some(check.label.clone()),
+            speaker_token_id: None,
         },
         meta,
         rng,

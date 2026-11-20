@@ -237,6 +237,8 @@ pub use mutations_reroll::RerollMutation;
 // Play-view Chat + Combat. Both are built on the existing `world_events`
 // bus rather than a separate transport — see each module's doc comment.
 pub mod mutations_chat;
+// Spec 103: a line or roll said as a token.
+pub mod speaker;
 pub use mutations_chat::{ChatMutation, ChatQuery};
 pub mod mutations_combat;
 pub use mutations_combat::{CombatMutation, CombatQuery};

@@ -88,9 +88,7 @@ test("the compendium's Books tab says the world holds no books, rather than refu
 test("controls that only a real instance has are not offered, and session notes are kept", async () => {
   // FR-013: offered and then refused is worse than not offered.
   await page.goto(`/demo/world/${WORLD_ID}`);
-  await expect(
-    page.getByRole("link", { name: /enter world/i }).first(),
-  ).toBeVisible();
+  await expect(page.getByTestId("play-button")).toBeVisible();
   await expect(page.getByRole("button", { name: "Delete world" })).toHaveCount(
     0,
   );
@@ -117,8 +115,9 @@ test("controls that only a real instance has are not offered, and session notes 
     "Running in your browser",
   );
 
-  await page.goto(`/demo/world/${WORLD_ID}/staging`);
+  await page.goto(`/demo/world/${WORLD_ID}`);
   await expect(page.getByTestId("session-setup-invite-link")).toHaveCount(0);
+  await page.getByTestId("session-notes-edit").click();
   const notes = page.getByTestId("session-notes-editor").locator(".cm-content");
   await notes.click();
   await page.keyboard.type("The goblins owe the party a cart.");
@@ -136,7 +135,7 @@ test("controls that only a real instance has are not offered, and session notes 
 
 test("every page of the Game Master's sidebar opens without the demo refusing anything", async () => {
   // T023. A fresh page load, so what was refused is this walk's alone.
-  await page.goto(`/demo/world/${WORLD_ID}/staging`);
+  await page.goto(`/demo/world/${WORLD_ID}`);
   const nav = page.getByTestId("world-sidebar-nav");
   await expect(nav).toBeVisible();
   const links = await nav.getByRole("link").evaluateAll((anchors) =>

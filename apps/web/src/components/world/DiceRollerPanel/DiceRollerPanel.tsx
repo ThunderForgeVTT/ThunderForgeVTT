@@ -1,30 +1,19 @@
-import { useState } from "react";
-import { rollDice } from "@/api/roll";
 import { RollResult } from "@/components/world/RollResult";
 import { RollVisibilityPicker } from "@/components/world/RollVisibility/RollVisibilityPicker";
-import { useRollVisibility } from "@/components/world/RollVisibility/useRollVisibility";
-import {
-  engineDiceTimings,
-  prefersReducedMotion,
-} from "@/engine/bevy/diceThrow";
-import type { RollResolutionRecord } from "@/types/roll";
 
 import { D20Icon } from "./D20Icon";
 import { DiceFormulaHelp } from "./DiceFormulaHelp";
-import { revealDelayMs } from "./revealDelay";
+import type { DiceRoller } from "./useDiceRoller";
 
 export interface DiceRollerPanelProps {
-  worldId: string;
+  /** The roller's state, held by the board (`useDiceRoller`). */
+  roller: DiceRoller;
   /**
    * Whether the viewer is the Game Master (spec 028 FR-067). Only they see a
    * note where the server determined a result differently; everyone else sees
    * an ordinary roll, which is the point of the rule.
    */
   isGameMaster?: boolean;
-  /** Whether the Bevy canvas is mounted — when it isn't, the result is
-   * shown immediately rather than waiting on an animation that will
-   * never play (FR-016). */
-  engineReady: boolean;
 }
 
 /**
@@ -37,44 +26,26 @@ export interface DiceRollerPanelProps {
  * never blocks or hides a resolved roll).
  */
 
+/**
+ * One tap, one die (owner's T017 ask): the common single rolls, so nobody
+ * types `1d6` to roll a d6. `dc` is the dice parser's coin.
+ */
+const QUICK_DICE = [
+  ["d20", "1d20"],
+  ["d12", "1d12"],
+  ["d10", "1d10"],
+  ["d8", "1d8"],
+  ["d6", "1d6"],
+  ["d4", "1d4"],
+  ["Coin", "1dc"],
+] as const;
+
 export function DiceRollerPanel({
-  worldId,
-  engineReady,
+  roller,
   isGameMaster = false,
 }: DiceRollerPanelProps) {
-  const [formula, setFormula] = useState("1d20");
-  const [isRolling, setIsRolling] = useState(false);
-  const [result, setResult] = useState<RollResolutionRecord | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  // Spec 081: who sees the roll, remembered per browser.
-  const [visibility, setVisibility] = useRollVisibility(isGameMaster);
-
-  const handleRoll = async () => {
-    setIsRolling(true);
-    setError(null);
-    setResult(null);
-    try {
-      const resolution = await rollDice(worldId, formula, { visibility });
-
-      // Spec 081 (FR-013): the board animates this roll from its world
-      // event, like every other client's roll; the panel only waits for the
-      // dice to settle before showing the total.
-      const delay = revealDelayMs({
-        engineReady,
-        timings: engineDiceTimings(),
-        reducedMotion: prefersReducedMotion(),
-      });
-      if (delay > 0) {
-        await new Promise((resolve) => setTimeout(resolve, delay));
-      }
-
-      setResult(resolution);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to roll dice");
-    } finally {
-      setIsRolling(false);
-    }
-  };
+  const { formula, setFormula, isRolling, result, error } = roller;
+  const handleRoll = roller.roll;
 
   return (
     <div
@@ -90,6 +61,40 @@ export function DiceRollerPanel({
         minWidth: "12rem",
       }}
     >
+      <div
+        role="group"
+        aria-label="Quick roll"
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(2.75rem, 1fr))",
+          gap: "0.25rem",
+        }}
+      >
+        {QUICK_DICE.map(([name, die]) => (
+          <button
+            key={die}
+            type="button"
+            data-testid={`dice-quick-${name.toLowerCase()}`}
+            onClick={() => void handleRoll(die)}
+            disabled={isRolling}
+            aria-label={name === "Coin" ? "Flip a coin" : `Roll a ${name}`}
+            style={{
+              minHeight: "2.75rem",
+              borderRadius: "0.5rem",
+              border: "1px solid rgba(255, 255, 255, 0.2)",
+              background: "transparent",
+              color: "inherit",
+              fontSize: "0.875rem",
+              fontWeight: 600,
+              fontVariantNumeric: "tabular-nums",
+              touchAction: "manipulation",
+              cursor: isRolling ? "wait" : "pointer",
+            }}
+          >
+            {name}
+          </button>
+        ))}
+      </div>
       <div style={{ display: "flex", gap: "0.5rem" }}>
         <input
           data-testid="dice-formula-input"
@@ -121,8 +126,8 @@ export function DiceRollerPanel({
       </div>
       <RollVisibilityPicker
         isGm={isGameMaster}
-        value={visibility}
-        onChange={setVisibility}
+        value={roller.visibility}
+        onChange={roller.setVisibility}
       />
       {error ? <p data-testid="dice-roll-error">{error}</p> : null}
       {result ? (

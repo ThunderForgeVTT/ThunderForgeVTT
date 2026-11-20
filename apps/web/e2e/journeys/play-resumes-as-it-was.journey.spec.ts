@@ -238,7 +238,7 @@ test.describe("spec 051 US4 journey: play resumes as it was", () => {
       let sideSceneId = "";
 
       await test.step("the Game Master makes a second scene in the Scenes section", async () => {
-        await gmTab.goto(`/world/${table.worldId}/staging`);
+        await gmTab.goto(`/world/${table.worldId}`);
         await gmTab.getByTestId("world-nav-scenes").click();
         await gmTab.waitForURL(new RegExp(`/world/${table.worldId}/scenes$`), {
           timeout: 15_000,
@@ -546,7 +546,7 @@ test.describe("spec 051 US4 journey: play resumes as it was", () => {
       await test.step("the scene taken down while paused is still withheld, and the Game Master is told as spec 015 tells them", async () => {
         await gmTab.goto(`/world/${table.worldId}/scenes`);
         await expect(
-          gmTab.getByRole("link", { name: "Starting Scene" }),
+          gmTab.getByRole("link", { name: "Starting Scene", exact: true }),
         ).toBeVisible({ timeout: 20_000 });
         await expect(gmTab.getByRole("link", { name: sideName })).toHaveCount(
           0,

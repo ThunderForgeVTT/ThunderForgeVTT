@@ -22,6 +22,7 @@ import { filterPlayers } from "@/pages/world/players/playerFilter";
 import { describeStanding } from "@/pages/world/players/playerStanding";
 import type { WorldActorRecord } from "@/types/actor";
 import { useAuth } from "@/hooks/useAuth";
+import { useWorldMembers } from "@/hooks/useWorldMembers";
 import {
   assignableRoles,
   canManageRole,
@@ -101,6 +102,14 @@ export function PlayersPage({ worldId, isGm }: PlayersPageProps) {
       active = false;
     };
   }, [worldId, refreshTick]);
+
+  // Spec 101 US2.3: what changed here (a role, a character, a removal) is
+  // what every other page of the world reads from the shared member list,
+  // so it is read again with this page's own.
+  const { refetch: refetchKnownMembers } = useWorldMembers(worldId);
+  useEffect(() => {
+    if (refreshTick > 0) void refetchKnownMembers();
+  }, [refreshTick, refetchKnownMembers]);
 
   // Every viewer reads the actor list: a GM to bind characters, and anyone to
   // learn which claimed heroes they may edit (`myPermissionLevel` and
@@ -280,10 +289,7 @@ export function PlayersPage({ worldId, isGm }: PlayersPageProps) {
         </p>
       ) : null}
 
-      <div
-        className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3"
-        data-testid="players-list"
-      >
+      <div className="grid auto-grid gap-3" data-testid="players-list">
         {visibleMembers.map((member) => {
           const standing = describeStanding(member);
           const isYou = member.userId === user?.id;

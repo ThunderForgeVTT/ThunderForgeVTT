@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "./fixtures/test";
+import { seatPlayer } from "./fixtures/helpers";
 
 /**
  * specs/011-world-compendium (US3): Session Setup's "Last Session Notes"
@@ -8,10 +9,21 @@ import { test, expect, type Page } from "./fixtures/test";
  * Players, Last Session Notes only — no NPC list, no Lore placeholder).
  */
 
+/** Spec 100 US3.3: a Game Master reads the recap first; the editor opens
+ * on Edit (or "Write the first recap" when there is none). */
+async function openNotesEditor(page: Page): Promise<void> {
+  const editor = page.getByTestId("session-notes-editor");
+  const edit = page.getByTestId("session-notes-edit");
+  await expect(editor.or(edit)).toBeVisible({ timeout: 15_000 });
+  if (await edit.isVisible()) await edit.click();
+  await expect(editor).toBeVisible();
+}
+
 /** CodeMirror renders a contenteditable `.cm-content`, not a native
  * textarea — `.fill()`/`toHaveValue()` don't apply. Click in, select all,
  * and type over it instead. */
 async function fillSessionNotes(page: Page, text: string): Promise<void> {
+  await openNotesEditor(page);
   const editor = page
     .getByTestId("session-notes-editor")
     .locator(".cm-content");
@@ -26,6 +38,7 @@ async function fillSessionNotes(page: Page, text: string): Promise<void> {
 /** Reads the editor's actual document content (one `.cm-line` per line),
  * distinct from the placeholder widget CodeMirror renders when empty. */
 async function readSessionNotes(page: Page): Promise<string> {
+  await openNotesEditor(page);
   const lines = await page
     .getByTestId("session-notes-editor")
     .locator(".cm-line")
@@ -70,8 +83,8 @@ async function registerAndCreateWorld(
   await page.waitForURL(/\/worlds\/create$/, { timeout: 15_000 });
   await page.locator("#world-name").fill(worldName);
   await page.getByRole("button", { name: /create world/i }).click();
-  await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
-  const match = /\/world\/([^/]+)\/staging$/.exec(new URL(page.url()).pathname);
+  await page.waitForURL(/\/world\/[^/]+$/, { timeout: 15_000 });
+  const match = /\/world\/([^/]+)$/.exec(new URL(page.url()).pathname);
   if (!match) {
     throw new Error(`Could not extract world id from URL: ${page.url()}`);
   }
@@ -106,8 +119,12 @@ test("DM edits and saves Last Session Notes; a Player sees it read-only", async 
   await page.getByTestId("session-notes-save-button").click();
   await expect(page.getByText("Saved.")).toBeVisible({ timeout: 10_000 });
 
-  // Persists across reload.
+  // Persists across reload, and is read before it is edited.
   await page.reload();
+  await expect(page.getByTestId("session-notes-rendered")).toContainText(
+    notesText,
+  );
+  await expect(page.getByTestId("session-notes-editor")).toHaveCount(0);
   await expect.poll(() => readSessionNotes(page)).toBe(notesText);
 
   // A Player sees the same text, read-only (no textarea/save control).
@@ -130,7 +147,8 @@ test("DM edits and saves Last Session Notes; a Player sees it read-only", async 
       { timeout: 15_000 },
     );
 
-    await playerPage.goto(`/world/${worldId}/staging`);
+    await seatPlayer(page, playerPage, worldId);
+    await playerPage.goto(`/world/${worldId}`);
     await expect(
       playerPage.getByTestId("session-notes-readonly"),
     ).toContainText(notesText);

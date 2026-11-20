@@ -218,6 +218,13 @@ export function subscribeToWorldEvents(
 export interface ActorSheetProps {
   actor: import("@/types/actor").WorldActorRecord;
   canEdit: boolean;
+  /**
+   * Spec 102: rolls a check the sheet shows (a skill's bonus, a save), as
+   * the dock's roll buttons would. Given only while the sheet is read, never
+   * while it is being edited, so a tap on a number has one meaning at a time.
+   * A pack that has nothing to offer it ignores it.
+   */
+  onRoll?: (roll: { label: string; formula: string }) => void;
 }
 
 /**

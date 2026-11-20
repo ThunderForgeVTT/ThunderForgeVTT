@@ -1,4 +1,6 @@
-export const pageLoaders = {
+import { retryImport } from "@/components/ui/lazy-boundary/retryImport";
+
+const loaders = {
   login: () => import("@/pages/auth/LoginPage"),
   signup: () => import("@/pages/auth/RegisterPage"),
   oauthCallback: () => import("@/pages/auth/OAuthCallbackPage"),
@@ -19,7 +21,7 @@ export const pageLoaders = {
   accountSettings: () => import("@/pages/user/AccountSettingsPage"),
   worldList: () => import("@/pages/world/WorldListPage"),
   createWorld: () => import("@/pages/world/CreateWorldPage"),
-  worldDashboard: () => import("@/pages/world/WorldDashboardPage"),
+  worldOverview: () => import("@/pages/world/overview/WorldOverviewPage"),
   worldWorkspace: () => import("@/pages/world/WorldPage"),
   worldStaging: () => import("@/pages/world/WorldStagingRoutePage"),
   worldCompendium: () => import("@/pages/world/WorldCompendiumRoutePage"),
@@ -51,6 +53,17 @@ export const pageLoaders = {
   status: () => import("@/pages/status/StatusPage"),
   notFound: () => import("@/pages/not-found/NotFoundPage"),
 } as const;
+
+/** Every page, each download retried on a dropped connection. */
+export const pageLoaders = retried(loaders);
+
+function retried<T extends Record<string, () => Promise<unknown>>>(
+  table: T,
+): T {
+  return Object.fromEntries(
+    Object.entries(table).map(([name, load]) => [name, retryImport(load)]),
+  ) as T;
+}
 
 export type PrefetchablePage = keyof typeof pageLoaders;
 

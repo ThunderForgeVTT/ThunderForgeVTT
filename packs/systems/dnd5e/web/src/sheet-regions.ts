@@ -145,7 +145,7 @@ export interface SheetRegion {
   kind: SheetRegionKind;
   title: string;
   blurb: string;
-  /** Columns the region takes at `lg` (three columns); one column below `md`. */
+  /** Columns the region takes in a three- or four-column sheet; one below `@md`. */
   span: 1 | 2 | 3;
 }
 
@@ -195,7 +195,7 @@ export const DND5E_SHEET_REGIONS: readonly SheetRegion[] = [
     kind: "skills",
     title: "Skills",
     blurb:
-      "Tick a proficiency and the bonus updates. Roll from the checks below.",
+      "Tap a skill to roll it. Edit to tick proficiencies; the bonus follows.",
     span: 2,
   },
   {

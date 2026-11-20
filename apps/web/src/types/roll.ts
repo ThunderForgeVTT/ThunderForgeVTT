@@ -85,6 +85,10 @@ export interface WorldRollRecord {
   rerollOffers: RollFacetRecord[];
   /** RFC 3339; until when this roll may be rerolled, or null. */
   rerollUntil: string | null;
+  /** Spec 103: the token the roll was made as. */
+  speakerTokenId?: string | null;
+  /** Spec 103: that token's name, or "Someone" where this viewer may not read it. */
+  speakerLabel?: string | null;
 }
 
 /** Spec 084: a facet a roll carries, named as its system names it. */

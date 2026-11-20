@@ -47,8 +47,8 @@ async function registerAndCreateWorld(
   await page.waitForURL(/\/worlds\/create$/, { timeout: 15_000 });
   await page.locator("#world-name").fill(worldName);
   await page.getByRole("button", { name: /create world/i }).click();
-  await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
-  const match = /\/world\/([^/]+)\/staging$/.exec(new URL(page.url()).pathname);
+  await page.waitForURL(/\/world\/[^/]+$/, { timeout: 15_000 });
+  const match = /\/world\/([^/]+)$/.exec(new URL(page.url()).pathname);
   if (!match) {
     throw new Error(`Could not extract world id from URL: ${page.url()}`);
   }
@@ -365,8 +365,8 @@ test.describe("T060: a targeted pack dresses the sheet and nothing else", () => 
     await page.goto("/worlds/create");
     await page.locator("#world-name").fill(`Bronze ${uniqueSuffix()}`);
     await page.getByRole("button", { name: /create world/i }).click();
-    await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
-    const silverWorld = /\/world\/([^/]+)\/staging$/.exec(
+    await page.waitForURL(/\/world\/[^/]+$/, { timeout: 15_000 });
+    const silverWorld = /\/world\/([^/]+)$/.exec(
       new URL(page.url()).pathname,
     )![1];
 

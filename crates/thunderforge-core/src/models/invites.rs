@@ -176,11 +176,7 @@ impl WorldInvite {
         // so this branch is unreachable in practice. It is preserved
         // deliberately: removing it would change behaviour for any row that
         // does have one, which is outside spec 027's scope (research §7).
-        if self.max_uses > 0 && self.used_count >= self.max_uses {
-            return false;
-        }
-
-        true
+        !(self.max_uses > 0 && self.used_count >= self.max_uses)
     }
 
     /// Increment usage count (if max_uses allows)

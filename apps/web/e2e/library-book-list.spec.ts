@@ -251,8 +251,8 @@ test.describe("The book list (spec 050 US3)", () => {
     await page.getByRole("option", { name: title as string }).click();
     await page.getByTestId(`create-world-book-${compendiumId}`).check();
     await page.getByRole("button", { name: /create world/i }).click();
-    await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 30_000 });
-    const firstWorld = /\/world\/([^/]+)\/staging$/.exec(
+    await page.waitForURL(/\/world\/[^/]+$/, { timeout: 30_000 });
+    const firstWorld = /\/world\/([^/]+)$/.exec(
       new URL(page.url()).pathname,
     )?.[1] as string;
 

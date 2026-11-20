@@ -21,7 +21,7 @@ test.describe("Spec 018 Scenarios 8-9: the Genie GM session loop", () => {
   }) => {
     test.setTimeout(60_000);
 
-    await page.goto(`/world/${demoWorld.worldId}/staging`);
+    await page.goto(`/world/${demoWorld.worldId}`);
 
     const wrapper = page.getByTestId("genie-session-panel-wrapper");
     await expect(wrapper).toBeVisible({ timeout: 15_000 });

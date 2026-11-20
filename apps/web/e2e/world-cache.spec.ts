@@ -331,10 +331,8 @@ test.describe("Client world cache (US1, T030-T032)", () => {
     const secondName = `E2E Cache B ${uniqueSuffix()}`;
     await page.locator("#world-name").fill(secondName);
     await page.getByRole("button", { name: /create world/i }).click();
-    await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
-    const second = /\/world\/([^/]+)\/staging$/.exec(
-      new URL(page.url()).pathname,
-    )?.[1];
+    await page.waitForURL(/\/world\/[^/]+$/, { timeout: 15_000 });
+    const second = /\/world\/([^/]+)$/.exec(new URL(page.url()).pathname)?.[1];
 
     expect(second, "second world should be created").toBeTruthy();
     expect(second).not.toBe(first);

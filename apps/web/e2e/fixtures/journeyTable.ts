@@ -86,10 +86,8 @@ export async function seatATable(
     await gmPage.waitForURL(/\/worlds\/create$/, { timeout: 15_000 });
     await gmPage.locator("#world-name").fill(worldName);
     await gmPage.getByRole("button", { name: /create world/i }).click();
-    await gmPage.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
-    worldId = /\/world\/([^/]+)\/staging$/.exec(
-      new URL(gmPage.url()).pathname,
-    )![1];
+    await gmPage.waitForURL(/\/world\/[^/]+$/, { timeout: 15_000 });
+    worldId = /\/world\/([^/]+)$/.exec(new URL(gmPage.url()).pathname)![1];
   });
 
   if (options.beforeInvite) {
@@ -149,15 +147,13 @@ export async function seatATable(
   };
 }
 
-/** From wherever `page` is, the world's dashboard, Enter world, then Play. */
+/** From wherever `page` is, the world's overview, then Play. */
 export async function enterPlayFromTheWorld(
   page: Page,
   worldId: string,
 ): Promise<void> {
-  if (!new URL(page.url()).pathname.endsWith(`/world/${worldId}/staging`)) {
+  if (!new URL(page.url()).pathname.endsWith(`/world/${worldId}`)) {
     await page.goto(`/world/${worldId}`);
-    await page.getByRole("link", { name: "Enter world" }).click();
-    await page.waitForURL(/\/staging$/, { timeout: 15_000 });
   }
   await page.getByTestId("play-button").click();
   await page.waitForURL(new RegExp(`/world/${worldId}/play$`), {

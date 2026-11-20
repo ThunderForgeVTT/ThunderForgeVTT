@@ -326,7 +326,7 @@ async function addTokens(
   count: number,
   actorId: string,
 ): Promise<void> {
-  await page.goto(`/world/${worldId}/staging`);
+  await page.goto(`/world/${worldId}`);
   const side = Math.ceil(Math.sqrt(count));
   // In chunks, so no single evaluate is long enough for a reload to land in
   // the middle of it and take the whole board with it.

@@ -8,6 +8,7 @@ import {
   getMyActorClaim,
 } from "@/api/actorClaims";
 import { getWorld } from "@/api/world";
+import { lookAroundFirst } from "@/hooks/useActorClaimGate";
 import { SEO } from "@/components/seo/SEO";
 import { Button } from "@/components/ui/button/Button";
 import { Card } from "@/components/ui/card/Card";
@@ -196,6 +197,18 @@ export default function ActorSelectionPage() {
               ? "or create your own."
               : "or wait for your GM to prepare one."}
           </p>
+          <Button
+            variant="ghost"
+            icon="compass"
+            className="mt-2 -ml-3"
+            data-testid="actor-select-look-around"
+            onClick={() => {
+              lookAroundFirst(worldId);
+              navigate(`/world/${worldId}`);
+            }}
+          >
+            Look around first
+          </Button>
         </div>
 
         {status ? <StatusBadge variant="danger">{status}</StatusBadge> : null}

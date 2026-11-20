@@ -1,4 +1,8 @@
-import { CharacterRollButtons } from "@/components/world/PlayDock/CharacterRollButtons";
+import {
+  CharacterRollButtons,
+  RollFeedback,
+} from "@/components/world/PlayDock/CharacterRollButtons";
+import { useCharacterRoller } from "@/components/world/PlayDock/useCharacterRoller";
 import { useCharacterRolls } from "@/components/world/PlayDock/useCharacterRolls";
 import type { WorldActorRecord } from "@/types/actor";
 
@@ -22,16 +26,17 @@ export function ActorRollsPanel({
   isGm,
 }: ActorRollsPanelProps) {
   const rolls = useCharacterRolls(worldId, actor);
+  const roller = useCharacterRoller(worldId, isGm);
   if (rolls.length === 0) return null;
   return (
     <section className="grid gap-2" data-testid="sheet-rolls">
       <h3 className="font-semibold">Rolls</h3>
       <CharacterRollButtons
-        worldId={worldId}
         rolls={rolls}
-        isGm={isGm}
+        roller={roller}
         testIdPrefix="sheet"
       />
+      <RollFeedback roller={roller} testIdPrefix="sheet" />
     </section>
   );
 }

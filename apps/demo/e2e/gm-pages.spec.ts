@@ -244,7 +244,6 @@ const WORKS: { route: string; heading: string | RegExp }[] = [
   { route: "/legal/operator", heading: "Operator responsibilities" },
   { route: W, heading: "A World To Try" },
   { route: `${W}/paused`, heading: "Play has resumed" },
-  { route: `${W}/staging`, heading: "A World To Try" },
   { route: `${W}/actor-select`, heading: "Choose your character" },
   { route: `${W}/collections`, heading: "Collections" },
   { route: `${W}/compendium`, heading: "A World To Try artifacts" },

@@ -40,6 +40,8 @@ fn row(bindings: Option<serde_json::Value>) -> RollRecord {
         facets: Vec::new(),
         reroll_of: None,
         reroll_spent: None,
+        speaker_token_id: None,
+        speaker_label: None,
     }
 }
 
@@ -159,6 +161,7 @@ async fn a_masked_roll_has_no_bindings_to_ask_for() {
             }]),
             visibility: Some(RollVisibility::GmEyes),
             label: Some("Stealth".to_string()),
+            speaker_token_id: None,
         },
         &mut rng,
     )

@@ -57,6 +57,7 @@ async fn roll(t: &Table, who: Uuid, visibility: RollVisibility) -> Uuid {
             bindings: None,
             visibility: Some(visibility),
             label: Some("Perception".to_string()),
+            speaker_token_id: None,
         },
         &mut rng,
     )

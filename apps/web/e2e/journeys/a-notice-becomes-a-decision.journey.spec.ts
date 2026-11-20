@@ -56,10 +56,8 @@ interface Seat {
 
 /** Press Play from wherever a member is in the world, and wait for the canvas. */
 async function pressPlay(page: Page, worldId: string): Promise<void> {
-  if (!new URL(page.url()).pathname.endsWith("/staging")) {
+  if (!new URL(page.url()).pathname.endsWith(`/world/${worldId}`)) {
     await page.goto(`/world/${worldId}`);
-    await page.getByRole("link", { name: "Enter world" }).click();
-    await page.waitForURL(/\/staging$/, { timeout: 15_000 });
   }
   await page.getByTestId("play-button").click();
   await page.waitForURL(new RegExp(`/world/${worldId}/play$`), {
@@ -98,10 +96,8 @@ async function seatATable(
     await gmPage.waitForURL(/\/worlds\/create$/, { timeout: 15_000 });
     await gmPage.locator("#world-name").fill(worldName);
     await gmPage.getByRole("button", { name: /create world/i }).click();
-    await gmPage.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
-    worldId = /\/world\/([^/]+)\/staging$/.exec(
-      new URL(gmPage.url()).pathname,
-    )![1];
+    await gmPage.waitForURL(/\/world\/[^/]+$/, { timeout: 15_000 });
+    worldId = /\/world\/([^/]+)$/.exec(new URL(gmPage.url()).pathname)![1];
   });
 
   let playerPage: Page | null = null;
@@ -165,12 +161,14 @@ async function startingSceneId(seat: Seat): Promise<string> {
   const tab = await seat.gmPage.context().newPage();
   try {
     // Staging, where the world's sidebar is: the dashboard has none.
-    await tab.goto(`/world/${seat.worldId}/staging`);
+    await tab.goto(`/world/${seat.worldId}`);
     await tab.getByTestId("world-nav-scenes").click();
     await tab.waitForURL(new RegExp(`/world/${seat.worldId}/scenes$`), {
       timeout: 15_000,
     });
-    await tab.getByRole("link", { name: "Starting Scene" }).click();
+    await tab
+      .getByRole("link", { name: "Starting Scene", exact: true })
+      .click();
     await tab.waitForURL(new RegExp(`/world/${seat.worldId}/scenes/[^/]+$`), {
       timeout: 15_000,
     });
@@ -530,7 +528,6 @@ test.describe("spec 051 US3 journey: a notice becomes a decision", () => {
         try {
           for (const path of [
             `/world/${seat.worldId}`,
-            `/world/${seat.worldId}/staging`,
             `/world/${seat.worldId}/compendium`,
           ]) {
             await tab.goto(path);

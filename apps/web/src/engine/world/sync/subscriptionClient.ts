@@ -25,6 +25,7 @@
  * `for await` loops would split events between them, not broadcast).
  */
 
+import { backoffDelay } from "@thunderforge/retry";
 import type { Client } from "graphql-ws";
 
 import { noteLastEvent } from "@/api/lastEvent";
@@ -562,10 +563,10 @@ function getClient(): Client {
       retryAttempts: Infinity,
       retryWait: async (retries) => {
         noteSocketRetry(retries);
-        const delayMs = Math.min(
-          RECONNECT_BASE_DELAY_MS * 2 ** retries,
-          RECONNECT_MAX_DELAY_MS,
-        );
+        const delayMs = backoffDelay(retries, {
+          baseMs: RECONNECT_BASE_DELAY_MS,
+          maxMs: RECONNECT_MAX_DELAY_MS,
+        });
         await new Promise((resolve) => setTimeout(resolve, delayMs));
       },
       on: {

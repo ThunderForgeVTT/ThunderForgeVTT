@@ -7,6 +7,7 @@ import {
 } from "@/components/navigation/siteLinks";
 import { FEATURE_DEMO } from "@/api/featureFlags";
 import { useFeatureFlag } from "@/hooks/useFeatureFlag";
+import { appHref } from "@/lib/appHref";
 
 /**
  * The site footer.
@@ -86,7 +87,7 @@ export function AppFooter() {
           <div className="grid gap-2 self-start">
             <span className="inline-flex items-center gap-2">
               <img
-                src="/brand-mark.svg"
+                src={appHref("/brand-mark.svg")}
                 alt=""
                 width={24}
                 height={24}

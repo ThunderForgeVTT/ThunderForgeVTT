@@ -31,10 +31,8 @@ async function openThePlayField(
   await page.waitForURL(/\/worlds\/create$/, { timeout: 15_000 });
   await page.locator("#world-name").fill(worldName);
   await page.getByRole("button", { name: /create world/i }).click();
-  await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
-  const worldId = /\/world\/([^/]+)\/staging$/.exec(
-    new URL(page.url()).pathname,
-  )?.[1];
+  await page.waitForURL(/\/world\/[^/]+$/, { timeout: 15_000 });
+  const worldId = /\/world\/([^/]+)$/.exec(new URL(page.url()).pathname)?.[1];
   if (!worldId) {
     throw new Error(`could not read the world id from ${page.url()}`);
   }

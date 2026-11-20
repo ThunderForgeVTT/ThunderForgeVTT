@@ -70,7 +70,7 @@ export async function createWorldAndPlay(
   await page.goto("/worlds/create");
   await page.locator("#world-name").fill(name);
   await page.getByRole("button", { name: /create world/i }).click();
-  await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 20_000 });
+  await page.waitForURL(/\/world\/[^/]+$/, { timeout: 20_000 });
   await page.getByTestId("play-button").click({ timeout: 20_000 });
   await page.waitForURL(/\/world\/[^/]+\/play$/, { timeout: 20_000 });
   const match = /\/world\/([^/]+)\/play$/.exec(new URL(page.url()).pathname);

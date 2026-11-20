@@ -146,7 +146,7 @@ export function useDockSections({
             setScenes((current) => [...current, scene])
           }
           onMapImportComplete={handleMapImportComplete}
-          onBackToStaging={() => navigate(`/world/${id}/staging`)}
+          onBackToStaging={() => navigate(`/world/${id}`)}
         />
       ),
     },

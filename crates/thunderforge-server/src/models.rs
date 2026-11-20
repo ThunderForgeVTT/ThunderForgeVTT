@@ -1849,6 +1849,9 @@ pub struct RollRecord {
     /// Spec 084: the roll this one rerolled, and what the reroll spent.
     pub reroll_of: Option<uuid::Uuid>,
     pub reroll_spent: Option<String>,
+    /// Spec 103: the token the roll was said as, and its name then.
+    pub speaker_token_id: Option<uuid::Uuid>,
+    pub speaker_label: Option<String>,
 }
 
 impl RollRecord {
@@ -1877,6 +1880,8 @@ pub struct NewRollRecord {
     pub facets: Vec<Option<String>>,
     pub reroll_of: Option<uuid::Uuid>,
     pub reroll_spent: Option<String>,
+    pub speaker_token_id: Option<uuid::Uuid>,
+    pub speaker_label: Option<String>,
 }
 
 impl NewRollRecord {
@@ -1906,6 +1911,8 @@ impl NewRollRecord {
             facets: Vec::new(),
             reroll_of: None,
             reroll_spent: None,
+            speaker_token_id: None,
+            speaker_label: None,
         }
     }
 }
@@ -1937,6 +1944,9 @@ pub struct ChatMessage {
     pub gm_only: bool,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
+    /// Spec 103: the token the line was said as, and its name then.
+    pub speaker_token_id: Option<uuid::Uuid>,
+    pub speaker_label: Option<String>,
 }
 
 #[derive(Insertable, Debug, Clone, Serialize, Deserialize)]
@@ -1949,6 +1959,8 @@ pub struct NewChatMessage {
     pub author_label: String,
     pub body: String,
     pub gm_only: bool,
+    pub speaker_token_id: Option<uuid::Uuid>,
+    pub speaker_label: Option<String>,
 }
 
 #[derive(Queryable, Selectable, Debug, Clone, Serialize, Deserialize)]

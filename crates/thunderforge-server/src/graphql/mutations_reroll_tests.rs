@@ -258,6 +258,7 @@ async fn only_the_maker_of_a_sheets_d20_test_may_reroll_it() {
             bindings: None,
             visibility: None,
             label: None,
+            speaker_token_id: None,
         },
         &mut StepRng(5),
     )

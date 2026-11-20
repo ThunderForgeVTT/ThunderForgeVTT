@@ -159,7 +159,10 @@ export function ActorImageryPanel({
   };
 
   return (
-    <Card className="grid gap-4 p-5" data-testid="actor-imagery-panel">
+    <Card
+      className="@container grid gap-4 p-5"
+      data-testid="actor-imagery-panel"
+    >
       <div className="grid gap-1">
         <h2 className="text-sm font-semibold tracking-widest text-muted-foreground uppercase">
           Imagery
@@ -169,7 +172,7 @@ export function ActorImageryPanel({
         </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 @sm:grid-cols-2">
         {ROLE_SLOTS.map((slot) => {
           const image = imageForRole(images, slot.role);
           const isBusy = busyRole === slot.role;

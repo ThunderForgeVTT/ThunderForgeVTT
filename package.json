@@ -70,6 +70,8 @@
     "e2e:lore:integration": "node ./scripts/e2e-parallel.mjs --shards=1 --slice=lore",
     "e2e:moderation": "pnpm run e2e:moderation:integration",
     "e2e:moderation:integration": "node ./scripts/e2e-parallel.mjs --shards=1 --slice=moderation",
+    "e2e:phone": "pnpm run e2e:phone:standalone",
+    "e2e:phone:standalone": "pnpm -F @thunderforge/demo e2e phone-board demo-notice",
     "e2e:play-pause": "pnpm run e2e:play-pause:integration",
     "e2e:play-pause:integration": "node ./scripts/e2e-parallel.mjs --shards=1 --slice=play-pause",
     "e2e:resumable-downloads": "pnpm run e2e:resumable-downloads:standalone && pnpm run e2e:resumable-downloads:integration",

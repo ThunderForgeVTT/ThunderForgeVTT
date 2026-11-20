@@ -104,6 +104,8 @@ pub struct RollLinks<'a> {
     pub system_id: &'a str,
     pub rerolled_by: Option<uuid::Uuid>,
     pub offers: &'a [(String, String)],
+    /// Spec 103: the speaker as the viewer may read it; none withholds it.
+    pub speaker_label: Option<&'a str>,
 }
 
 fn named(system_id: &str, ids: &[String]) -> Vec<RollFacet> {
@@ -142,6 +144,10 @@ pub struct WorldRoll {
     pub reroll_offers: Vec<RollFacet>,
     /// RFC 3339; null when the roll cannot be rerolled at all.
     pub reroll_until: Option<String>,
+    /// Spec 103: the token the roll was made as.
+    pub speaker_token_id: Option<uuid::Uuid>,
+    /// Spec 103: its name, or "Someone" where the viewer may not read it.
+    pub speaker_label: Option<String>,
 }
 
 impl WorldRoll {
@@ -192,6 +198,8 @@ impl WorldRoll {
                 })
                 .collect(),
             reroll_until,
+            speaker_token_id: row.speaker_token_id,
+            speaker_label: links.speaker_label.map(str::to_string),
         }
     }
 }

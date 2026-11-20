@@ -155,7 +155,7 @@ test.describe("Spec 020 User Story 3: Puzzle Clock segment rewards", () => {
       timeout: 15_000,
     });
 
-    await gmPage.goto(`/world/${worldId}/staging`);
+    await gmPage.goto(`/world/${worldId}`);
     await expect(gmPage.getByTestId("genie-session-panel-wrapper")).toBeVisible(
       { timeout: 15_000 },
     );
@@ -334,7 +334,7 @@ test.describe("Spec 020 User Story 3: Puzzle Clock segment rewards", () => {
     // Second clock: a single end-of-quest reward at the final segment,
     // WHOLE_PARTY, 2 Favor — verified LIVE on the real second account's
     // own client (no reload).
-    await playerPage.goto(`/world/${worldId}/staging`);
+    await playerPage.goto(`/world/${worldId}`);
     await expect(playerPage.getByTestId("genie-session-panel")).toBeVisible({
       timeout: 15_000,
     });

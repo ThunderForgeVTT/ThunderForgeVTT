@@ -1315,6 +1315,8 @@ diesel::table! {
         gm_only -> Bool,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        speaker_token_id -> Nullable<Uuid>,
+        speaker_label -> Nullable<Text>,
     }
 }
 
@@ -1753,6 +1755,8 @@ diesel::table! {
         facets -> Array<Nullable<Text>>,
         reroll_of -> Nullable<Uuid>,
         reroll_spent -> Nullable<Text>,
+        speaker_token_id -> Nullable<Uuid>,
+        speaker_label -> Nullable<Text>,
     }
 }
 
@@ -1956,6 +1960,7 @@ diesel::joinable!(world_books -> compendiums (compendium_id));
 diesel::joinable!(world_books -> users (switched_on_by));
 diesel::joinable!(world_books -> worlds (world_id));
 diesel::joinable!(world_chat_messages -> scenes (scene_id));
+diesel::joinable!(world_chat_messages -> tokens (speaker_token_id));
 diesel::joinable!(world_chat_messages -> users (author_user_id));
 diesel::joinable!(world_chat_messages -> worlds (world_id));
 diesel::joinable!(world_collection_members -> users (added_by));
@@ -2006,6 +2011,7 @@ diesel::joinable!(world_offers -> worlds (world_id));
 diesel::joinable!(world_play_pause_triggers -> world_play_pause_requests (request_id));
 diesel::joinable!(world_play_pause_triggers -> world_play_pauses (pause_id));
 diesel::joinable!(world_play_pauses -> world_play_pause_requests (request_id));
+diesel::joinable!(world_roll_records -> tokens (speaker_token_id));
 diesel::joinable!(world_roll_records -> world_actors (actor_id));
 diesel::joinable!(world_roll_records -> worlds (world_id));
 diesel::joinable!(world_staged_content -> world_abilities (adopted_ability_id));

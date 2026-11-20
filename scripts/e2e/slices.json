@@ -738,6 +738,44 @@
       ]
     },
     {
+      "name": "phone",
+      "summary": "The play board on a phone: bottom row, sheets, installable app (specs/102-mobile-play-board)",
+      "own": [],
+      "neighbours": [
+        {
+          "spec": "play-panels-by-role.spec.ts",
+          "seam": "the dock sections each role sees are the ones the phone rows are built from"
+        },
+        {
+          "spec": "dice-roll.spec.ts",
+          "seam": "the dice roller renders inside a sheet on a phone"
+        },
+        {
+          "spec": "board-loading.spec.ts",
+          "seam": "the board's loading and stopped overlays sit under the phone chrome"
+        },
+        {
+          "spec": "play-pause.spec.ts",
+          "seam": "the paused banner moves into the phone's top stack"
+        },
+        {
+          "spec": "world-navigation.spec.ts",
+          "seam": "the world page shell now fills the dynamic viewport height"
+        }
+      ],
+      "paths": [
+        "apps/web/src/components/world/PhoneBoard/**",
+        "apps/web/src/hooks/usePhoneLayout.ts",
+        "apps/web/src/pages/world/WorldPage.tsx",
+        "apps/web/src/layouts/world-layout/WorldLayout.tsx",
+        "apps/web/index.html",
+        "apps/demo/index.html",
+        "apps/demo/src/DemoNotice.tsx",
+        "apps/demo/e2e/{phone-board,demo-notice}.spec.ts"
+      ],
+      "standalone": "pnpm -F @thunderforge/demo e2e phone-board demo-notice"
+    },
+    {
       "name": "play-pause",
       "summary": "Pausing and resuming play (specs/051-operator-playfield-shutdown)",
       "own": ["play-pause"],
@@ -832,7 +870,7 @@
       ],
       "paths": [
         "apps/web/src/components/world/PlayDock/{RollEntry,CharacterRollButtons}.tsx",
-        "apps/web/src/components/world/PlayDock/{feedTime,useCharacterRolls,systemStatRolls}.ts",
+        "apps/web/src/components/world/PlayDock/{feedTime,useCharacterRolls,useCharacterRoller,systemStatRolls}.ts",
         "apps/web/src/lib/systemPackIndexes.ts",
         "apps/web/src/components/world/RollVisibility/**",
         "apps/web/src/pages/world/actor/ActorRollsPanel.tsx",
@@ -874,7 +912,6 @@
         "apps/web/src/components/world/LevelTabs/**",
         "apps/web/src/components/world/SceneSwitcher/**",
         "apps/web/src/engine/world/sync/{scenes,exploration,levels}.ts",
-        "apps/web/src/layouts/world-layout/WorldStagingPage.tsx",
         "apps/web/src/pages/world/WorldStagingRoutePage.tsx",
         "apps/web/src/pages/world/scenes/**",
         "apps/web/src/pages/world/useSceneLevels.ts",
@@ -1128,11 +1165,31 @@
         "world-event-catchup.spec.ts",
         "world-session-tokens.spec.ts",
         "world-layout-widths.spec.ts",
+        "world-widths.spec.ts",
+        "world-overview.spec.ts",
         "live-sync.spec.ts",
         "demo-first-session.spec.ts",
-        "world-base-map.spec.ts"
+        "world-base-map.spec.ts",
+        "world-navigation.spec.ts"
       ],
-      "neighbours": [],
+      "neighbours": [
+        {
+          "spec": "actor-claim.spec.ts",
+          "seam": "the overview's claim gate remembers a cleared check (spec 101)"
+        },
+        {
+          "spec": "players-section.spec.ts",
+          "seam": "a world's members and roles are shared across its pages (spec 101)"
+        },
+        {
+          "spec": "play-pause.spec.ts",
+          "seam": "the paused banner reads the shared play state (spec 101)"
+        },
+        {
+          "spec": "gm-staging-page.spec.ts",
+          "seam": "the overview renders from the remembered world (spec 101)"
+        }
+      ],
       "paths": [
         "apps/web/src/api/{world,worldContent,worldStatistics,worldMembers,reconcile,baseMaps}.ts",
         "apps/web/src/appearance/**",
@@ -1150,7 +1207,8 @@
         "apps/web/src/pages/world/components/**",
         "apps/web/src/pages/world/settings/{WorldAppearanceSettingsCard,AuthoringToolGrantsCard}.tsx",
         "apps/web/src/pages/world/worldsView.ts",
-        "apps/web/src/pages/world/{WorldListPage,CreateWorldPage,JoinWorldPage,WorldDashboardPage,WorldPage,BaseMapPicker,useDockSections,WorldBoardOverlays}.tsx",
+        "apps/web/src/pages/world/{WorldListPage,CreateWorldPage,JoinWorldPage,WorldPage,BaseMapPicker,useDockSections,WorldBoardOverlays}.tsx",
+        "apps/web/src/pages/world/overview/**",
         "apps/web/src/pages/world/{worldPageHelpers,useSceneLoadState,useSceneRecord,useEngineCanvas,useGmToolRail,useBoardInput,useEngineBridge,useExploration,useSceneTransition,useSceneContent,useWorldEventStreams,useSceneLiveSync,useConnectivity,useScenePlay,usePinnedTokenStatus,useMapImport}.ts",
         "apps/web/src/types/{world,seo}.ts",
         "apps/web/src/utils/env.ts",

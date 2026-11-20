@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "./fixtures/test";
+import { seatPlayer } from "./fixtures/helpers";
 import { expectNoAxeViolations } from "./fixtures/axe";
 
 /**
@@ -58,8 +59,8 @@ async function createWorld(page: Page, worldName: string): Promise<string> {
   await page.goto("/worlds/create");
   await page.locator("#world-name").fill(worldName);
   await page.getByRole("button", { name: /create world/i }).click();
-  await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
-  const match = /\/world\/([^/]+)\/staging$/.exec(new URL(page.url()).pathname);
+  await page.waitForURL(/\/world\/[^/]+$/, { timeout: 15_000 });
+  const match = /\/world\/([^/]+)$/.exec(new URL(page.url()).pathname);
   if (!match)
     throw new Error(`Could not extract world id from URL: ${page.url()}`);
   return match[1];
@@ -178,7 +179,8 @@ test.describe("Spec 016: GM assigns a game system and its legal notice is persis
       },
     );
 
-    await playerPage.goto(`/world/${worldId}/staging`);
+    await seatPlayer(gmPage, playerPage, worldId);
+    await playerPage.goto(`/world/${worldId}`);
     const about = playerPage.getByTestId("about-this-table");
     await expect(about.getByTestId("active-system-card")).toContainText(
       "Genie",
@@ -228,6 +230,7 @@ test.describe("Spec 016: GM assigns a game system and its legal notice is persis
       (url) => url.pathname.startsWith(`/world/${worldId}`),
       { timeout: 15_000 },
     );
+    await seatPlayer(gmPage, playerPage, worldId);
 
     await test.step("the GIF and the line, and none of the settings", async () => {
       await playerContext.route(GM_SIDE_GIF, (route) =>
@@ -278,9 +281,7 @@ test.describe("Spec 016: GM assigns a game system and its legal notice is persis
 
     await test.step("the button goes back to the world", async () => {
       await playerPage.getByTestId("settings-back-to-world").click();
-      await expect(playerPage).toHaveURL(
-        new RegExp(`/world/${worldId}/staging$`),
-      );
+      await expect(playerPage).toHaveURL(new RegExp(`/world/${worldId}$`));
       await expect(playerPage.getByTestId("about-this-table")).toBeVisible({
         timeout: 15_000,
       });

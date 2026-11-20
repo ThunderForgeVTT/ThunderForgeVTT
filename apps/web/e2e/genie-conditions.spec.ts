@@ -16,7 +16,7 @@ test.describe("Spec 018 Scenario 4: applying and clearing a condition", () => {
   }) => {
     test.setTimeout(60_000);
 
-    await page.goto(`/world/${demoWorld.worldId}/staging`);
+    await page.goto(`/world/${demoWorld.worldId}`);
 
     const createActor = await graphql<{
       data: { createActor: { id: string } };

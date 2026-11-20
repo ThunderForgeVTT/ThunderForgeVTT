@@ -4,10 +4,13 @@ import { lazy, Suspense, useMemo, useState } from "react";
 import { updateWorldSessionNotes } from "@/api/world";
 import { Button } from "@/components/ui/button/Button";
 import { StatusBadge } from "@/components/ui/status-badge/StatusBadge";
+import { retryImport } from "@/components/ui/lazy-boundary/retryImport";
 
 // Lazy: CodeMirror is only needed by a GM actually editing notes, not by
 // every visitor of Session Setup (see MarkdownCodeEditor.tsx's own docs).
-const MarkdownCodeEditor = lazy(() => import("./MarkdownCodeEditor"));
+const MarkdownCodeEditor = lazy(
+  retryImport(() => import("./MarkdownCodeEditor")),
+);
 
 export interface SessionNotesPanelProps {
   worldId: string;
@@ -44,6 +47,9 @@ export function SessionNotesPanel({
   const [isSaving, setIsSaving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
+  // Spec 100 US3.3: the recap is read first, by the Game Master too; the
+  // editor opens on Edit.
+  const [editing, setEditing] = useState(false);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -70,12 +76,52 @@ export function SessionNotesPanel({
       <div data-testid="session-notes-readonly">
         {notes ? (
           <div
-            className="prose prose-sm max-w-none text-sm dark:prose-invert"
+            className="prose prose-sm max-w-[75ch] text-sm dark:prose-invert"
             dangerouslySetInnerHTML={{ __html: renderedNotes }}
           />
         ) : (
-          <p className="text-sm text-muted-foreground italic">No notes yet.</p>
+          <p
+            className="text-sm text-muted-foreground italic"
+            data-testid="notes-empty"
+          >
+            No notes yet.
+          </p>
         )}
+      </div>
+    );
+  }
+
+  if (!editing) {
+    return (
+      <div className="grid justify-items-start gap-3">
+        {notes ? (
+          <div
+            className="prose prose-sm max-w-[75ch] text-sm dark:prose-invert"
+            data-testid="session-notes-rendered"
+            dangerouslySetInnerHTML={{ __html: renderedNotes }}
+          />
+        ) : (
+          <p
+            className="text-sm text-muted-foreground"
+            data-testid="notes-empty"
+          >
+            No recap yet. A few lines on what happened help everyone pick up
+            where they left off.
+          </p>
+        )}
+        <Button
+          type="button"
+          size="sm"
+          variant={notes ? "ghost" : "secondary"}
+          icon="quill"
+          onClick={() => {
+            setDraft(notes ?? "");
+            setEditing(true);
+          }}
+          data-testid="session-notes-edit"
+        >
+          {notes ? "Edit" : "Write the first recap"}
+        </Button>
       </div>
     );
   }
@@ -129,6 +175,19 @@ export function SessionNotesPanel({
           data-testid="session-notes-save-button"
         >
           {isSaving ? "Saving..." : "Save"}
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          onClick={() => {
+            setEditing(false);
+            setShowPreview(false);
+            setStatus(null);
+          }}
+          data-testid="session-notes-done"
+        >
+          Done
         </Button>
         {status ? (
           <StatusBadge variant={status === "Saved." ? "success" : "danger"}>

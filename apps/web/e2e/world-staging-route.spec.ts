@@ -50,16 +50,16 @@ async function registerAndCreateWorld(
   await page.waitForURL(/\/worlds\/create$/, { timeout: 15_000 });
   await page.locator("#world-name").fill(worldName);
   await page.getByRole("button", { name: /create world/i }).click();
-  await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
-  const match = /\/world\/([^/]+)\/staging$/.exec(new URL(page.url()).pathname);
+  await page.waitForURL(/\/world\/[^/]+$/, { timeout: 15_000 });
+  const match = /\/world\/([^/]+)$/.exec(new URL(page.url()).pathname);
   if (!match) {
     throw new Error(`Could not extract world id from URL: ${page.url()}`);
   }
   return match[1];
 }
 
-test.describe("US1: welcome hub 'Enter' goes to staging, not straight to canvas", () => {
-  test("clicking Enter for a world lands on /world/:id/staging", async ({
+test.describe("US1: welcome hub 'Enter' goes to the overview, not straight to canvas", () => {
+  test("clicking Enter for a world lands on /world/:id (spec 100)", async ({
     page,
   }) => {
     const worldName = `E2E Welcome Enter ${uniqueSuffix()}`;
@@ -67,7 +67,7 @@ test.describe("US1: welcome hub 'Enter' goes to staging, not straight to canvas"
 
     await page.goto("/welcome");
     await page.getByRole("link", { name: `Enter ${worldName}` }).click();
-    await page.waitForURL(new RegExp(`/world/${worldId}/staging$`), {
+    await page.waitForURL(new RegExp(`/world/${worldId}$`), {
       timeout: 15_000,
     });
     await expect(page.getByTestId("world-staging-page")).toBeVisible();
@@ -87,5 +87,45 @@ test.describe("Spec 011 regression: staging no longer embeds the NPC catalog", (
     // longer exists anywhere, so asserting its absence would pass vacuously
     // and stop testing that staging has no NPC authoring (spec 031 FR-035).
     await expect(page.getByTestId("new-npc-link")).toHaveCount(0);
+  });
+});
+
+test.describe("Spec 100 US2: staging redirects to the overview", () => {
+  test("/world/:id/staging lands on /world/:id, replacing the history entry", async ({
+    page,
+  }) => {
+    const worldId = await registerAndCreateWorld(
+      page,
+      `E2E Staging Redirect ${uniqueSuffix()}`,
+    );
+    await page.goto("/worlds");
+    await page.goto(`/world/${worldId}/staging`);
+    await page.waitForURL(new RegExp(`/world/${worldId}$`), {
+      timeout: 15_000,
+    });
+    await expect(page.getByTestId("world-staging-page")).toBeVisible();
+    await page.goBack();
+    await page.waitForURL(/\/worlds$/, { timeout: 15_000 });
+  });
+});
+
+test.describe("Spec 100 US2: two clicks from the worlds list to the table", () => {
+  test("Enter world, then Play, opens /world/:id/play", async ({ page }) => {
+    const worldName = `E2E Two Clicks ${uniqueSuffix()}`;
+    const worldId = await registerAndCreateWorld(page, worldName);
+
+    await page.goto("/worlds");
+    await page
+      .getByRole("link", { name: "Enter world" })
+      .and(page.locator(`[href="/world/${worldId}"]`))
+      .first()
+      .click();
+    await page.waitForURL(new RegExp(`/world/${worldId}$`), {
+      timeout: 15_000,
+    });
+    await page.getByTestId("play-button").click();
+    await page.waitForURL(new RegExp(`/world/${worldId}/play$`), {
+      timeout: 15_000,
+    });
   });
 });

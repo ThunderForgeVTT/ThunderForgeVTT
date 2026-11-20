@@ -44,10 +44,8 @@ test("a scene created after the world default changes inherits that default, wit
   const worldName = `E2E Default Grid Type ${uniqueSuffix()}`;
   await page.locator("#world-name").fill(worldName);
   await page.getByRole("button", { name: /create world/i }).click();
-  await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
-  const worldId = /\/world\/([^/]+)\/staging$/.exec(
-    new URL(page.url()).pathname,
-  )?.[1];
+  await page.waitForURL(/\/world\/[^/]+$/, { timeout: 15_000 });
+  const worldId = /\/world\/([^/]+)$/.exec(new URL(page.url()).pathname)?.[1];
   if (!worldId) throw new Error("Could not extract world id");
 
   // Set the world default to Hexagons.

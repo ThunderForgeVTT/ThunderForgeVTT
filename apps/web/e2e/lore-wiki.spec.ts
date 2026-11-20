@@ -59,8 +59,8 @@ async function registerAndCreateWorld(
   await page.waitForURL(/\/worlds\/create$/, { timeout: 15_000 });
   await page.locator("#world-name").fill(worldName);
   await page.getByRole("button", { name: /create world/i }).click();
-  await page.waitForURL(/\/world\/[^/]+\/staging$/, { timeout: 15_000 });
-  const match = /\/world\/([^/]+)\/staging$/.exec(new URL(page.url()).pathname);
+  await page.waitForURL(/\/world\/[^/]+$/, { timeout: 15_000 });
+  const match = /\/world\/([^/]+)$/.exec(new URL(page.url()).pathname);
   if (!match) {
     throw new Error(`Could not extract world id from URL: ${page.url()}`);
   }
@@ -466,7 +466,7 @@ test.describe("FR-021: entry-level Owner (not DM-only) can delete; Viewer cannot
         .locator("#world-name")
         .fill(`E2E Lore Player World ${uniqueSuffix()}`);
       await playerPage.getByRole("button", { name: /create world/i }).click();
-      await playerPage.waitForURL(/\/world\/[^/]+\/staging$/, {
+      await playerPage.waitForURL(/\/world\/[^/]+$/, {
         timeout: 15_000,
       });
       const playerId = await currentUserId(playerPage);
