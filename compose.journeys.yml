@@ -64,8 +64,8 @@ services:
       - /logs:mode=1777
 
   mailpit:
-    # The dev stack's image and settings (`compose.yml`), minus its
-    # `container_name` and `restart: always`. Mailpit's SMTP listener is
+    # The dev stack's image and settings (`compose.yml`), minus its restart
+    # policy. Mailpit's SMTP listener is
     # plaintext, which is what the `none` security option exists for, and it
     # accepts any credentials. Its own store is in memory by default, so it
     # needs no tmpfs to keep the promise above.
