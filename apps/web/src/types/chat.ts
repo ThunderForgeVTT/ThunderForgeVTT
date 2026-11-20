@@ -10,4 +10,8 @@ export interface ChatMessageRecord {
   /** True only on messages the server decided this viewer may see. */
   gmOnly: boolean;
   createdAt: string;
+  /** Spec 103: the token the line was said as; null when said as the author. */
+  speakerTokenId?: string | null;
+  /** Spec 103: that token's name, or "Someone" where this viewer may not read it. */
+  speakerLabel?: string | null;
 }

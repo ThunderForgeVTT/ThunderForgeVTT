@@ -38,6 +38,8 @@ export interface RollOptions {
   visibility?: RollVisibility;
   /** What the roll was for — "Stealth", "Longsword". */
   label?: string;
+  /** Spec 103: the token the roll is made as. */
+  speakerTokenId?: string;
 }
 
 /**
@@ -51,7 +53,7 @@ export interface RollOptions {
 export function rollDice(
   worldId: string,
   formula: string,
-  { bindings, visibility, label }: RollOptions = {},
+  { bindings, visibility, label, speakerTokenId }: RollOptions = {},
 ): Promise<RollResolutionRecord> {
   return postGraphQL<RollDiceMutation>(
     `
@@ -61,7 +63,9 @@ export function rollDice(
         }
       }
     `,
-    { input: { worldId, formula, bindings, visibility, label } },
+    {
+      input: { worldId, formula, bindings, visibility, label, speakerTokenId },
+    },
   ).then((data) => data.rollDice);
 }
 
@@ -98,6 +102,8 @@ const WORLD_ROLL_FIELDS = `
     label
   }
   rerollUntil
+  speakerTokenId
+  speakerLabel
 `;
 
 const WORLD_ROLL_ENTRY_FIELDS = `
